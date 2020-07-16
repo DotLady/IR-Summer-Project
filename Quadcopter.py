@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 
-@author: Daniela Ordóñez Tapiaf
+@author: Daniela Ordóñez Tapiaf}
 
 """
 
@@ -13,8 +13,8 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib import colors
 
-IMG_WIDTH = 256
-IMG_HEIGHT = 256
+IMG_WIDTH = 512
+IMG_HEIGHT = 512
 
 grid_matrix = np.zeros((512, 512))
 
@@ -37,27 +37,55 @@ def findColorsMasks(original):
     blueMax = np.array([135, 255, 255])
     blue_mask = cv2.inRange(hsv_image, blueMin, blueMax)
 
-    # Green colour
-    greenMin = np.array([40, 0, 20])
-    greenMax = np.array([80, 255, 255])
-    green_mask = cv2.inRange(hsv_image, greenMin, greenMax)
+    # Green tshirt colour
+    greenMin_tshirt = np.array([40, 120, 20])
+    greenMax_tshirt = np.array([80, 255, 255])
+    tshirt_mask = cv2.inRange(hsv_image, greenMin_tshirt, greenMax_tshirt)
+
+    # Green tree colour
+    greenMin_tree = np.array([40, 0, 20])
+    greenMax_tree = np.array([80, 120, 255])
+    tree_mask = cv2.inRange(hsv_image, greenMin_tree, greenMax_tree)
 
     lower_white = np.array([0, 0, 0])
     upper_white = np.array([0, 0, 255])
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
 
     map_mask = cv2.bitwise_or(blue_mask, red_mask)
-    obstacle_mask = cv2.bitwise_or(green_mask, white_mask)
 
-    return map_mask, obstacle_mask, white_mask
+    return map_mask, tree_mask, white_mask
+
+
+def regionOfInterest(given_image, roi_ratios):
+    x_ratio_start = roi_ratios[0]
+    y_ratio_start = roi_ratios[1]
+    x_ratio_end = roi_ratios[2]
+    y_ratio_end = roi_ratios[3]
+    mask = np.zeros_like(given_image)
+
+    # -------------------------------------------------------------------------
+    # | (x_ratio_start, y_ratio_start)           (x_ratio_end, y_ratio_start) |
+    # |                                                                       |
+    # | (x_ratio_start, y_ratio_end)             (x_ratio_end, y_ratio_end)   |
+    # -------------------------------------------------------------------------
+
+    vertices = np.array([[IMG_WIDTH*x_ratio_start, IMG_HEIGHT*y_ratio_start], [IMG_WIDTH*x_ratio_start, IMG_HEIGHT*y_ratio_end],
+                         [IMG_WIDTH*x_ratio_end, IMG_HEIGHT*y_ratio_end], [IMG_WIDTH*x_ratio_end, IMG_HEIGHT*y_ratio_start]], np.int32)
+    cv2.fillPoly(mask, [vertices], (255, 255, 255))
+
+    return_image = cv2.bitwise_and(given_image, mask)
+    return return_image
 
 
 def detectCenterOfMass(given_image):
-    ret, thresh = cv2.threshold(given_image, 0, 255, 0)
+    blur_image = cv2.medianBlur(given_image, 21)
+    color_image = cv2.cvtColor(blur_image, cv2.COLOR_GRAY2BGR)
+
+    temp_image = regionOfInterest(blur_image, [0.05, 0.05, 0.95, 0.95])
+
+    ret, thresh = cv2.threshold(temp_image, 0, 255, 0)
     contours, hierarchy = cv2.findContours(
         thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    return_image = cv2.cvtColor(given_image, cv2.COLOR_GRAY2BGR)
-    center_X = IMG_WIDTH/2.0
 
     for c in contours:
         # compute the center of the contour
@@ -66,11 +94,44 @@ def detectCenterOfMass(given_image):
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
             # draw the contour and center of the shape on the image
-            cv2.drawContours(return_image, [c], -1, (0, 255, 0), 2)
-            cv2.circle(return_image, (cX, cY), 7, (0, 0, 255), -1)
-            center_X = cX
+            cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
+            cv2.circle(color_image, (cX, cY), 7, (0, 0, 255), -1)
 
-    return (return_image)
+    return color_image
+
+
+def detectCorners(given_image):
+    # color_image is in BGR
+    blur_image = cv2.medianBlur(given_image, 21)
+    color_image = cv2.cvtColor(blur_image, cv2.COLOR_GRAY2BGR)
+
+    temp_image = regionOfInterest(blur_image, [0.05, 0.05, 0.95, 0.95])
+
+    corners = cv2.goodFeaturesToTrack(temp_image, 10, 0.01, 1)
+
+    if corners is not None:
+        for corner in corners:
+            # Get the coordinates of the found corners
+            x, y = corner.ravel()
+            cv2.circle(color_image, (int(x), int(y)), 5, (0, 255, 0), -1)
+
+    return color_image
+
+
+def detectContours(given_image):
+    # color_image is in BGR
+    blur_image = cv2.medianBlur(given_image, 21)
+    color_image = cv2.cvtColor(blur_image, cv2.COLOR_GRAY2BGR)
+
+    temp_image = regionOfInterest(blur_image, [0.05, 0.05, 0.95, 0.95])
+    # obtener los contornos
+    contours, _ = cv2.findContours(
+        temp_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    # dibujar los contornos
+    cv2.drawContours(color_image, contours, -1, (0, 0, 255), 2, cv2.LINE_AA)
+
+    return color_image
 
 
 def detectBlobs(given_image):
@@ -79,8 +140,8 @@ def detectBlobs(given_image):
     params = cv2.SimpleBlobDetector_Params()
 
     # Change thresholds
-    params.minThreshold = 10
-    params.maxThreshold = 200
+    params.minThreshold = 100
+    params.maxThreshold = 400
 
     # Filter by Color.
     params.filterByColor = True
@@ -88,15 +149,15 @@ def detectBlobs(given_image):
 
     # Filter by Area.
     params.filterByArea = True
-    params.minArea = 10
+    params.minArea = 5
 
     # Filter by Circularity
     params.filterByCircularity = True
-    params.minCircularity = 0.1
+    params.minCircularity = 0.5
 
     # Filter by Convexity
     params.filterByConvexity = True
-    params.minConvexity = 0.87
+    params.minConvexity = 0.5
 
     # Filter by Inertia
     params.filterByInertia = True
@@ -114,7 +175,6 @@ def detectBlobs(given_image):
 
     # Draw detected blobs as red circles.
     # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
-    print("------")
     im_with_keypoints = cv2.drawKeypoints(given_image, keypoints, np.array(
         []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
@@ -168,25 +228,32 @@ if clientID != -1:
             clientID, camera_orth, 0, sim.simx_opmode_buffer)
 
         if res == sim.simx_return_ok:
-            original = np.array(image, dtype=np.uint8)
+            original = np.array(image_orth, dtype=np.uint8)
             original.resize([resolution[0], resolution[1], 3])
             original = cv2.flip(original, 0)
             original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
-            cv2.imshow("Camera", original)
+            # cv2.imshow("Camera", original)
 
-            map_mask, obstacle_mask, white_mask = findColorsMasks(original)
+            map_mask, tree_mask, white_mask = findColorsMasks(original)
+            obstacle_mask = cv2.bitwise_or(tree_mask, white_mask)
+
             output_image = cv2.bitwise_and(
                 original, original, mask=map_mask)
-            cv2.imshow("MapMask", output_image)
+            # cv2.imshow("MapMask", output_image)
+
             obstacle_mask = cv2.bilateralFilter(obstacle_mask, 9, 110, 110)
             cv2.imshow("ObstacleMask", obstacle_mask)
 
             center_mass = detectCenterOfMass(white_mask)
-            # cv2.imshow("CenterOfMass", obstacle_mask)
+            # cv2.imshow("CenterOfMass", center_mass)
 
-            im_with_keypoints = detectBlobs(obstacle_mask)
+            corners_image = detectCorners(white_mask)
+            cv2.imshow("Corners", corners_image)
+
+            contours_image = detectContours(white_mask)
+            # im_with_keypoints = detectBlobs(obstacle_mask)
             # Show keypoints
-            # cv2.imshow("Keypoints", im_with_keypoints)
+            cv2.imshow("Contours", contours_image)
             # cv2.waitKey(0)
 
             # for i in range(len(mask)):
