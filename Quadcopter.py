@@ -73,21 +73,40 @@ if clientID != -1:
             original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
             # cv2.imshow("Camera", original)
 
-            map_mask, tree_mask, white_mask = fun.findColorsMasks(original)
-            obstacle_mask = cv2.bitwise_or(tree_mask, white_mask)
+            # Find masks for hospital, car and obstacles
+            hospital_mask, car_mask, tree_mask, white_mask = fun.findColorsMasks(
+                original)
 
-            output_image = cv2.bitwise_and(
-                original, original, mask=map_mask)
+            # Find START and END coordinates
+            center_hospital_image, start_x, start_y = fun.detectCenterOfMass(
+                hospital_mask)
+            # print("Centro hospital: (", start_x, ", ", start_y, ")")
+            center_car_image, end_x, end_y = fun.detectCenterOfMass(
+                car_mask)
+            # print("Centro auto: (", end_x, ", ", end_y, ")")
+
+            # output_image = cv2.bitwise_and(original, original, mask=map_mask)
             # cv2.imshow("MapMask", output_image)
 
+            # Finding a path fron START to END
+            obstacle_mask = cv2.bitwise_or(tree_mask, white_mask)
             obstacle_mask = cv2.bilateralFilter(obstacle_mask, 9, 110, 110)
             cv2.imshow("ObstacleMask", obstacle_mask)
 
-            center_mass = fun.detectCenterOfMass(white_mask)
-            # cv2.imshow("CenterOfMass", center_mass)
+            grid_matrix = obstacle_mask/255
+
+            # Plot map and path (PENDING)
+            fig, ax = plt.subplots(figsize=(10, 10))
+            ax.imshow(grid_matrix, cmap=plt.cm.tab20)
+            ax.scatter(start_x, start_y, marker="*", color="yellow", s=200)
+            ax.scatter((end_x - 12), end_y, marker="*", color="red", s=200)
+            plt.show()
+
+            # print("Ceros: ", np.count_nonzero(grid_matrix == 0))
+            # print("Unos: ", np.count_nonzero(grid_matrix == 1))
 
             corners_image = fun.detectCorners(white_mask)
-            cv2.imshow("Corners", corners_image)
+            # cv2.imshow("Corners", corners_image)
 
             contours_image = fun.detectContours(white_mask)
             # im_with_keypoints = detectBlobs(obstacle_mask)
@@ -95,27 +114,6 @@ if clientID != -1:
             cv2.imshow("Contours", contours_image)
             # cv2.waitKey(0)
 
-            # for i in range(len(mask)):
-            #     for j in range(len(mask)):
-            #         if mask[i][j] == 255:
-            #             matrix[i][j] = 1
-            # grid_matrix = mask/255
-
-            # # fig, ax = plt.subplots()
-            # cmap = colors.ListedColormap(['white', 'red'])
-
-            # bounds = [0, 1, 512]
-            # norm = colors.BoundaryNorm(bounds, cmap.N)
-            # img = plt.imshow(grid_matrix, interpolation='nearest', origin='lower',
-            #                  cmap=cmap, norm=norm)
-            # plt.show()
-
-            # # plot it
-            # ax.imshow(grid_matrix, interpolation='none', cmap=cmap, norm=norm)
-
-            # print(grid_matrix)
-
-            # cv2.cvtColor(output_image, cv2.COLOR_HSV2BGR)
         elif res == sim.simx_return_novalue_flag:
             # Camera has not started or is not returning images
             print("Wait, there's no image yet")

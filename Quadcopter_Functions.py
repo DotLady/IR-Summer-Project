@@ -21,12 +21,12 @@ def findColorsMasks(original):
     redMax_2 = np.array([180, 255, 255])
     red_mask_1 = cv2.inRange(hsv_image, redMin_1, redMax_1)
     red_mask_2 = cv2.inRange(hsv_image, redMin_2, redMax_2)
-    red_mask = cv2.bitwise_or(red_mask_1, red_mask_2)
+    car_mask = cv2.bitwise_or(red_mask_1, red_mask_2)
 
     # Blue colour
     blueMin = np.array([85, 120, 20])
     blueMax = np.array([135, 255, 255])
-    blue_mask = cv2.inRange(hsv_image, blueMin, blueMax)
+    hospital_mask = cv2.inRange(hsv_image, blueMin, blueMax)
 
     # Green tshirt colour
     greenMin_tshirt = np.array([40, 120, 20])
@@ -42,9 +42,7 @@ def findColorsMasks(original):
     upper_white = np.array([0, 0, 255])
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
 
-    map_mask = cv2.bitwise_or(blue_mask, red_mask)
-
-    return map_mask, tree_mask, white_mask
+    return hospital_mask, car_mask, tree_mask, white_mask
 
 
 def regionOfInterest(given_image, roi_ratios):
@@ -69,12 +67,12 @@ def regionOfInterest(given_image, roi_ratios):
 
 
 def detectCenterOfMass(given_image):
-    blur_image = cv2.medianBlur(given_image, 21)
-    color_image = cv2.cvtColor(blur_image, cv2.COLOR_GRAY2BGR)
+    # blur_image = cv2.medianBlur(given_image, 21)
+    color_image = cv2.cvtColor(given_image, cv2.COLOR_GRAY2BGR)
 
-    temp_image = regionOfInterest(blur_image, [0.05, 0.05, 0.95, 0.95])
+    # temp_image = regionOfInterest(given_image, [0.05, 0.05, 0.95, 0.95])
 
-    ret, thresh = cv2.threshold(temp_image, 0, 255, 0)
+    ret, thresh = cv2.threshold(given_image, 0, 255, 0)
     contours, hierarchy = cv2.findContours(
         thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -85,10 +83,10 @@ def detectCenterOfMass(given_image):
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
             # draw the contour and center of the shape on the image
-            cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
-            cv2.circle(color_image, (cX, cY), 7, (0, 0, 255), -1)
+            # cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
+            cv2.circle(color_image, (cX, cY), 7, (0, 255, 0), -1)
 
-    return color_image
+    return color_image, cX, cY
 
 
 def detectCorners(given_image):
