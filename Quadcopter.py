@@ -48,6 +48,18 @@ if clientID != -1:
     if res != sim.simx_return_ok:
         print('Could not get handle to Camera')
 
+    # Body
+    res, body = sim.simxGetObjectHandle(
+        clientID, 'Quadricopter', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Robot')
+
+    # Floor
+    res, floor = sim.simxGetObjectHandle(
+        clientID, 'ResizableFloor_5_25', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Floor')
+
 
 # -------------------------------------- Main Control Loop --------------------------------------
 
@@ -80,10 +92,10 @@ if clientID != -1:
             # Find START and END coordinates
             center_hospital_image, start_x, start_y = fun.detectCenterOfMass(
                 hospital_mask)
-            # print("Centro hospital: (", start_x, ", ", start_y, ")")
+            print("Centro hospital: (", start_x, ", ", start_y, ")")
             center_car_image, end_x, end_y = fun.detectCenterOfMass(
                 car_mask)
-            # print("Centro auto: (", end_x, ", ", end_y, ")")
+            print("Centro auto: (", end_x, ", ", end_y, ")")
 
             # output_image = cv2.bitwise_and(original, original, mask=map_mask)
             # cv2.imshow("MapMask", output_image)
@@ -95,12 +107,22 @@ if clientID != -1:
 
             grid_matrix = obstacle_mask/255
 
+            # M = int(IMG_WIDTH/8)
+            # N = int(IMG_HEIGHT/8)
+            # tiles = [grid_matrix[x:x+M, y:y+N]
+            #          for x in range(0, IMG_WIDTH, M) for y in range(0, IMG_HEIGHT, N)]
+            # print("Tamaño: ", np.size(tiles))
+
             # Plot map and path (PENDING)
             fig, ax = plt.subplots(figsize=(10, 10))
             ax.imshow(grid_matrix, cmap=plt.cm.tab20)
-            ax.scatter(start_x, start_y, marker="*", color="yellow", s=200)
-            ax.scatter((end_x - 12), end_y, marker="*", color="red", s=200)
+            ax.scatter(start_x, start_y, marker="*", color="yellow", s=300)
+            ax.scatter((end_x - 12), end_y, marker="*", color="red", s=300)
             plt.show()
+
+            path = fun.findPath_AStar(
+                grid_matrix, (start_x, start_y), (end_x, end_y))
+            print(path)
 
             # print("Ceros: ", np.count_nonzero(grid_matrix == 0))
             # print("Unos: ", np.count_nonzero(grid_matrix == 1))
@@ -124,6 +146,24 @@ if clientID != -1:
         keypress = cv2.waitKey(1) & 0xFF
         if keypress == ord('q'):
             break
+
+        res, position = sim.simxGetObjectPosition(
+            clientID, body, floor, sim.simx_opmode_oneshot)
+        if res == sim.simx_return_ok:
+            print("X: ", round(position[0], 0))
+            print("Y: ", round(position[1], 0))
+            print("Z: ", round(position[2], 0))
+
+        # List of pixels that can be considered (non visited)
+        # open_list
+        # # List of pixels that cannnot be considered again (already visited)
+        # closed_list
+        # # Movement cost of going from the START position to the current pixel
+        # movement_cost
+        # # Movement estimated cost of going from the current position to the END pixel
+        # estimated_cost
+
+        # pixel_score = movement_cost + estimated_cost
 else:
     print('Could not connect to remote API server')
 

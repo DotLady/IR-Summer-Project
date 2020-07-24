@@ -168,3 +168,104 @@ def detectBlobs(given_image):
         []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
 
     return im_with_keypoints
+
+
+def heuristicFunc(start_x, start_y, end_x, end_y):
+    return ((end_x - start_x)**2 + (end_y - start_y)**2)
+
+
+# Node class for the A* algorithm
+class Node():
+    def __init__(self, parent=None, position=None):
+        self.parent = parent
+        self.position = position
+
+        self.start_distance = 0
+        self.end_distance = 0
+        self.total_score = 0
+
+    def __eq__(self, other):
+        return self.position == other.position
+
+
+def findPath_AStar(matrix_map, start_position, end_position):
+    # Create the START and END nodes
+    start_node = Node(None, start_position)
+    start_node.start_distance = start_node.end_distance = start_node.total_score = 0
+    end_node = Node(None, end_position)
+    end_node.start_distance = end_node.end_distance = end_node.total_score = 0
+
+    # List of non-visited nodes (can be considered)
+    open_list = []
+    # List of visited nodes (cannnot be considered again)
+    closed_list = []
+
+    # Add the START node to the list
+    open_list.append(start_node)
+
+    # Loop until you find the end
+    while (len(open_list) > 0):
+        # Get the current node
+        current_node = open_list[0]
+        current_index = 0
+
+        for index, item in enumerate(open_list):
+            if item.total_score < current_node.total_score:
+                current_node = item
+                current_index = index
+
+        # Pop current index off open_list, add node to closed_list
+        open_list.pop(current_index)
+        closed_list.append(current_node)
+
+        # If the end node (red Manta) is reached, return reversed path
+        if current_node == end_node:
+            path = []
+            current = current_node
+            while current is not None:
+                path.append(current.position)
+                current = current.parent
+            return path[::-1]
+
+        # Generate children
+        children = []
+        # Adjacent squares
+        for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+
+            # Get node position
+            node_position = (
+                current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
+
+            # Make sure within range
+            if node_position[0] > (len(matrix_map) - 1) or node_position[0] < 0 or node_position[1] > (len(matrix_map[len(matrix_map)-1]) - 1) or node_position[1] < 0:
+                continue
+
+            # Make sure walkable terrain
+            if matrix_map[node_position[0]][node_position[1]] != 0:
+                continue
+
+            # Create new node
+            new_node = Node(current_node, node_position)
+            children.append(new_node)
+
+        # Loop through children
+        for child in children:
+
+            # Child is in the closed_list
+            for closed_child in closed_list:
+                if child == closed_child:
+                    continue
+
+            # Create the total_score, start_distance and end_distance values
+            child.start_distance = current_node.start_distance + 1
+            child.end_distance = ((child.position[0] - end_node.position[0]) ** 2) + (
+                (child.position[1] - end_node.position[1]) ** 2)
+            child.total_score = child.start_distance + child.end_distance
+
+            # Child is already in the open list
+            for open_node in open_list:
+                if child == open_node and child.start_distance > open_node.start_distance:
+                    continue
+
+            # Add the child to the open list
+            open_list.append(child)
