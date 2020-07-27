@@ -50,7 +50,7 @@ if clientID != -1:
 
     # Body
     res, body = sim.simxGetObjectHandle(
-        clientID, 'Quadricopter', sim.simx_opmode_oneshot_wait)
+        clientID, 'Quadricopter_target', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
@@ -103,10 +103,15 @@ if clientID != -1:
             # Finding a path fron START to END
             obstacle_mask = cv2.bitwise_or(tree_mask, white_mask)
             obstacle_mask = cv2.bilateralFilter(obstacle_mask, 9, 110, 110)
-            cv2.imshow("ObstacleMask", obstacle_mask)
+            # cv2.imshow("ObstacleMask", obstacle_mask)
 
-            grid_matrix = obstacle_mask/255
-
+            grid_matrix = np.divide(obstacle_mask, 255)
+            cost = 1
+            path = fun.search(grid_matrix, cost, [
+                              start_x, start_y], [end_x, end_y])
+            print(path)
+            print('\n'.join(
+                [''.join(["{:" ">3d}".format(item) for item in row]) for row in path]))
             # M = int(IMG_WIDTH/8)
             # N = int(IMG_HEIGHT/8)
             # tiles = [grid_matrix[x:x+M, y:y+N]
@@ -114,15 +119,11 @@ if clientID != -1:
             # print("Tamaño: ", np.size(tiles))
 
             # Plot map and path (PENDING)
-            fig, ax = plt.subplots(figsize=(10, 10))
-            ax.imshow(grid_matrix, cmap=plt.cm.tab20)
-            ax.scatter(start_x, start_y, marker="*", color="yellow", s=300)
-            ax.scatter((end_x - 12), end_y, marker="*", color="red", s=300)
-            plt.show()
-
-            path = fun.findPath_AStar(
-                grid_matrix, (start_x, start_y), (end_x, end_y))
-            print(path)
+            # fig, ax = plt.subplots(figsize=(10, 10))
+            # ax.imshow(grid_matrix, cmap=plt.cm.tab20)
+            # ax.scatter(start_x, start_y, marker="*", color="yellow", s=300)
+            # ax.scatter((end_x - 12), end_y, marker="*", color="red", s=300)
+            # plt.show()
 
             # print("Ceros: ", np.count_nonzero(grid_matrix == 0))
             # print("Unos: ", np.count_nonzero(grid_matrix == 1))
@@ -133,7 +134,7 @@ if clientID != -1:
             contours_image = fun.detectContours(white_mask)
             # im_with_keypoints = detectBlobs(obstacle_mask)
             # Show keypoints
-            cv2.imshow("Contours", contours_image)
+            # cv2.imshow("Contours", contours_image)
             # cv2.waitKey(0)
 
         elif res == sim.simx_return_novalue_flag:
@@ -154,16 +155,6 @@ if clientID != -1:
             print("Y: ", round(position[1], 0))
             print("Z: ", round(position[2], 0))
 
-        # List of pixels that can be considered (non visited)
-        # open_list
-        # # List of pixels that cannnot be considered again (already visited)
-        # closed_list
-        # # Movement cost of going from the START position to the current pixel
-        # movement_cost
-        # # Movement estimated cost of going from the current position to the END pixel
-        # estimated_cost
-
-        # pixel_score = movement_cost + estimated_cost
 else:
     print('Could not connect to remote API server')
 

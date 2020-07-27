@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib import colors
+import heapq
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
@@ -175,7 +176,7 @@ def heuristicFunc(start_x, start_y, end_x, end_y):
 
 
 # Node class for the A* algorithm
-class Node():
+class Node:
     def __init__(self, parent=None, position=None):
         self.parent = parent
         self.position = position
@@ -188,84 +189,96 @@ class Node():
         return self.position == other.position
 
 
-def findPath_AStar(matrix_map, start_position, end_position):
-    # Create the START and END nodes
-    start_node = Node(None, start_position)
+def return_path(current_node, maze):
+    path = []
+    num_rows, num_cols = np.shape(maze)
+    result = [[-1 for i in range(num_cols)] for j in range(num_rows)]
+    current = current_node
+    while current is not None:
+        path.append(current.position)
+        current = current.parent
+    path = path[::-1]  # Return reversed path
+    start_value = 0
+    for i in range(len(path)):
+        result[path[i][0]][path[i][1]] = start_value
+        start_value += 1
+    return result
+
+
+def search(maze, cost, start, end):
+    start_node = Node(None, tuple(start))
     start_node.start_distance = start_node.end_distance = start_node.total_score = 0
-    end_node = Node(None, end_position)
+    end_node = Node(None, tuple(end))
     end_node.start_distance = end_node.end_distance = end_node.total_score = 0
 
-    # List of non-visited nodes (can be considered)
-    open_list = []
-    # List of visited nodes (cannnot be considered again)
-    closed_list = []
+    # Initialize both open and closed list
+    yet_to_visit_list = []
+    visited_list = []
+    yet_to_visit_list.append(start_node)
 
-    # Add the START node to the list
-    open_list.append(start_node)
+    outer_iterations = 0
+    max_iterations = (len(np.floor_divide(maze, 2))) ** 10
 
-    # Loop until you find the end
-    while (len(open_list) > 0):
-        # Get the current node
-        current_node = open_list[0]
+    move = [[-1, 0], [0, -1], [1, 0], [0, 1]]
+
+    num_rows, num_cols = np.shape(maze)
+
+    while len(yet_to_visit_list) > 0:
+        outer_iterations += 1
+        current_node = yet_to_visit_list[0]
         current_index = 0
-
-        for index, item in enumerate(open_list):
+        for index, item in enumerate(yet_to_visit_list):
             if item.total_score < current_node.total_score:
                 current_node = item
                 current_index = index
 
-        # Pop current index off open_list, add node to closed_list
-        open_list.pop(current_index)
-        closed_list.append(current_node)
+        if outer_iterations > max_iterations:
+            print("Giving up on pathfinding too many iterations")
+            return return_path(current_node, maze)
 
-        # If the end node (red Manta) is reached, return reversed path
+        yet_to_visit_list.pop(current_index)
+        visited_list.append(current_node)
+
         if current_node == end_node:
-            path = []
-            current = current_node
-            while current is not None:
-                path.append(current.position)
-                current = current.parent
-            return path[::-1]
+            return return_path(current_node, maze)
 
-        # Generate children
         children = []
-        # Adjacent squares
-        for new_position in [(0, -1), (0, 1), (-1, 0), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)]:
+
+        for new_position in move:  # Adjacent squares
 
             # Get node position
             node_position = (
                 current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
 
-            # Make sure within range
-            if node_position[0] > (len(matrix_map) - 1) or node_position[0] < 0 or node_position[1] > (len(matrix_map[len(matrix_map)-1]) - 1) or node_position[1] < 0:
+            # Make sure within range (maze boundaries)
+            if node_position[0] > (num_rows - 1) or node_position[0] < 0 or node_position[1] > (num_cols - 1) or node_position[1] < 0:
                 continue
 
             # Make sure walkable terrain
-            if matrix_map[node_position[0]][node_position[1]] != 0:
+            if maze[node_position[0]][node_position[1]] != 0:
                 continue
 
             # Create new node
             new_node = Node(current_node, node_position)
+
+            # Append
             children.append(new_node)
 
         # Loop through children
         for child in children:
+            # Child is on the closed list
+            if len([visited_child for visited_child in visited_list if visited_child == child]) > 0:
+                continue
 
-            # Child is in the closed_list
-            for closed_child in closed_list:
-                if child == closed_child:
-                    continue
-
-            # Create the total_score, start_distance and end_distance values
-            child.start_distance = current_node.start_distance + 1
+            # Create the f, start_distance, and h values
+            child.start_distance = current_node.start_distance + cost
             child.end_distance = ((child.position[0] - end_node.position[0]) ** 2) + (
                 (child.position[1] - end_node.position[1]) ** 2)
             child.total_score = child.start_distance + child.end_distance
 
             # Child is already in the open list
-            for open_node in open_list:
-                if child == open_node and child.start_distance > open_node.start_distance:
-                    continue
+            if len([i for i in yet_to_visit_list if child == i and child.start_distance > i.start_distance]) > 0:
+                continue
 
             # Add the child to the open list
-            open_list.append(child)
+            yet_to_visit_list.append(child)
