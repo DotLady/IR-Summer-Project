@@ -16,6 +16,7 @@ from matplotlib import colors
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
+# GRND_BOT_SIZE = 1
 
 grid_matrix = np.zeros((512, 512))
 
@@ -106,9 +107,11 @@ if clientID != -1:
             # cv2.imshow("ObstacleMask", obstacle_mask)
 
             grid_matrix = np.divide(obstacle_mask, 255)
+            map_matrix = fun.createMap(grid_matrix)
+
             cost = 1
-            path = fun.search(grid_matrix, cost, [
-                              start_x, start_y], [end_x, end_y])
+            path = fun.searchPath(map_matrix, cost, [
+                start_x, start_y], [end_x, end_y])
             print(path)
             print('\n'.join(
                 [''.join(["{:" ">3d}".format(item) for item in row]) for row in path]))

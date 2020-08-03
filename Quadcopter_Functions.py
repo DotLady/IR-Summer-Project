@@ -8,6 +8,7 @@ import heapq
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
+# GRND_BOT_SIZE = 1
 
 # Find the masks by color (red, green and blue)
 
@@ -171,11 +172,29 @@ def detectBlobs(given_image):
     return im_with_keypoints
 
 
-def heuristicFunc(start_x, start_y, end_x, end_y):
-    return ((end_x - start_x)**2 + (end_y - start_y)**2)
+def createMap(grid_matrix):
+    map_matrix = np.copy(grid_matrix)
 
+    size_y = len(grid_matrix)
+    size_x = len(grid_matrix[0])
+
+    for y in range(size_y):
+        for x in range(size_x):
+            if (grid_matrix[y][x] == 1):
+                if (x > 0):
+                    map_matrix[y][x-1] = 1
+                if (x < size_x-1):
+                    map_matrix[y][x+1] = 1
+                if (y > 0):
+                    map_matrix[y-1][x] = 1
+                if (y < size_y-1):
+                    map_matrix[y+1][x] = 1
+
+    return map_matrix
 
 # Node class for the A* algorithm
+
+
 class Node:
     def __init__(self, parent=None, position=None):
         self.parent = parent
@@ -194,18 +213,37 @@ def return_path(current_node, maze):
     num_rows, num_cols = np.shape(maze)
     result = [[-1 for i in range(num_cols)] for j in range(num_rows)]
     current = current_node
+
     while current is not None:
         path.append(current.position)
+        print(current.position)
         current = current.parent
     path = path[::-1]  # Return reversed path
+
+    for i in range(len(path) - 1):
+        if (path[i+1][0] == path[i][0]):
+            if (path[i+1][1] > path[i][1]):
+                print("Move East towards position ", path[i+1])
+                print("(", path[i+1][0], ",", path[i+1][1], ", 90 )")
+            else:
+                print("Move West towards position ", path[i+1])
+                print("(", path[i+1][0], ",", path[i+1][1], ", 270 )")
+        elif (path[i+1][0] < path[i][0]):
+            print("Move North towards position ", path[i+1])
+            print("(", path[i+1][0], ",", path[i+1][1], ", 180 )")
+        else:
+            print("Move South towards position ", path[i+1])
+            print("(", path[i+1][0], ",", path[i+1][1], ", 0 )")
+
     start_value = 0
     for i in range(len(path)):
         result[path[i][0]][path[i][1]] = start_value
         start_value += 1
+
     return result
 
 
-def search(maze, cost, start, end):
+def searchPath(maze, cost, start, end):
     start_node = Node(None, tuple(start))
     start_node.start_distance = start_node.end_distance = start_node.total_score = 0
     end_node = Node(None, tuple(end))
