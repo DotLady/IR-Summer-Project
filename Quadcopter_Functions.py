@@ -1,3 +1,5 @@
+'''File that includes all the functions used in the Quadcopter.py file'''
+
 import sim
 import cv2
 import numpy as np
@@ -29,11 +31,6 @@ def findColorsMasks(original):
     blueMin = np.array([85, 120, 20])
     blueMax = np.array([135, 255, 255])
     hospital_mask = cv2.inRange(hsv_image, blueMin, blueMax)
-
-    # Green tshirt colour
-    greenMin_tshirt = np.array([40, 120, 20])
-    greenMax_tshirt = np.array([80, 255, 255])
-    tshirt_mask = cv2.inRange(hsv_image, greenMin_tshirt, greenMax_tshirt)
 
     # Green tree colour
     greenMin_tree = np.array([40, 0, 20])
@@ -68,8 +65,10 @@ def regionOfInterest(given_image, roi_ratios):
     return return_image
 
 
-def detectCenterOfMass(given_image):
-    # blur_image = cv2.medianBlur(given_image, 21)
+def detectCenterOfMass(given_image, blurImage):
+    if blurImage:
+        given_image = cv2.medianBlur(given_image, 21)
+
     color_image = cv2.cvtColor(given_image, cv2.COLOR_GRAY2BGR)
 
     # temp_image = regionOfInterest(given_image, [0.05, 0.05, 0.95, 0.95])
@@ -78,6 +77,9 @@ def detectCenterOfMass(given_image):
     contours, hierarchy = cv2.findContours(
         thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
+    cX = IMG_WIDTH/2
+    cY = IMG_HEIGHT/2
+
     for c in contours:
         # compute the center of the contour
         M = cv2.moments(c)
@@ -85,7 +87,7 @@ def detectCenterOfMass(given_image):
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
             # draw the contour and center of the shape on the image
-            # cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
+            cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
             cv2.circle(color_image, (cX, cY), 7, (0, 255, 0), -1)
 
     return color_image, cX, cY

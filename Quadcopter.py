@@ -92,10 +92,10 @@ if clientID != -1:
 
             # Find START and END coordinates
             center_hospital_image, start_x, start_y = fun.detectCenterOfMass(
-                hospital_mask)
+                hospital_mask, False)
             print("Centro hospital: (", start_x, ", ", start_y, ")")
             center_car_image, end_x, end_y = fun.detectCenterOfMass(
-                car_mask)
+                car_mask, False)
             print("Centro auto: (", end_x, ", ", end_y, ")")
 
             # output_image = cv2.bitwise_and(original, original, mask=map_mask)
