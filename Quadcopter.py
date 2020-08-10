@@ -13,6 +13,7 @@ import matplotlib as mpl
 import Quadcopter_Functions as fun
 from matplotlib import pyplot as plt
 from matplotlib import colors
+import tcod
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
@@ -37,15 +38,9 @@ if clientID != -1:
     # Get handles to simulation objects
     print('Obtaining handles of simulation objects')
 
-    # Floor perspective camera for exploration
-    res, camera_pers = sim.simxGetObjectHandle(
-        clientID, 'Vision_sensor', sim.simx_opmode_oneshot_wait)
-    if res != sim.simx_return_ok:
-        print('Could not get handle to Camera')
-
     # Floor orthographic camera for exploration
     res, camera_orth = sim.simxGetObjectHandle(
-        clientID, 'Vision_sensor0', sim.simx_opmode_oneshot_wait)
+        clientID, 'Vision_sensor', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Camera')
 
@@ -67,15 +62,11 @@ if clientID != -1:
     # Start main control loop
     print('Starting control loop')
 
-    res, resolution, image_pers = sim.simxGetVisionSensorImage(
-        clientID, camera_pers, 0, sim.simx_opmode_streaming)
     res, resolution, image_orth = sim.simxGetVisionSensorImage(
         clientID, camera_orth, 0, sim.simx_opmode_streaming)
 
     while (sim.simxGetConnectionId(clientID) != -1):
         # Get image from Camera
-        res_pers, resolution, image_pers = sim.simxGetVisionSensorImage(
-            clientID, camera_pers, 0, sim.simx_opmode_buffer)
         res, resolution, image_orth = sim.simxGetVisionSensorImage(
             clientID, camera_orth, 0, sim.simx_opmode_buffer)
 
@@ -99,37 +90,40 @@ if clientID != -1:
             print("Centro auto: (", end_x, ", ", end_y, ")")
 
             # output_image = cv2.bitwise_and(original, original, mask=map_mask)
-            # cv2.imshow("MapMask", output_image)
+            # cv2.imshow("HospitalMask", center_hospital_image)
+            # cv2.imshow("CarMask", center_car_image)
 
             # Finding a path fron START to END
-            obstacle_mask = cv2.bitwise_or(tree_mask, white_mask)
-            obstacle_mask = cv2.bilateralFilter(obstacle_mask, 9, 110, 110)
-            # cv2.imshow("ObstacleMask", obstacle_mask)
+            obstacles_image = cv2.bitwise_or(tree_mask, white_mask)
+            thick_mask = fun.createFatMap(white_mask)
+            map_matrix = cv2.bitwise_or(tree_mask, thick_mask)
 
-            grid_matrix = np.divide(obstacle_mask, 255)
-            map_matrix = fun.createMap(grid_matrix)
+            # # Save map image
+            # map_matrix.dtype = 'uint8'
+            # status = cv2.imwrite(
+            #     'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/python_maze.jpg', map_matrix)
+            # print("Image written to file-system : ", status)
 
-            cost = 1
-            path = fun.searchPath(map_matrix, cost, [
-                start_x, start_y], [end_x, end_y])
-            print(path)
-            print('\n'.join(
-                [''.join(["{:" ">3d}".format(item) for item in row]) for row in path]))
-            # M = int(IMG_WIDTH/8)
-            # N = int(IMG_HEIGHT/8)
-            # tiles = [grid_matrix[x:x+M, y:y+N]
-            #          for x in range(0, IMG_WIDTH, M) for y in range(0, IMG_HEIGHT, N)]
-            # print("Tamaño: ", np.size(tiles))
+            # Path Finding algorithms
+            pf_path = fun.pathFinder(
+                map_matrix, start_y, start_x, end_y, end_x)
 
-            # Plot map and path (PENDING)
-            # fig, ax = plt.subplots(figsize=(10, 10))
-            # ax.imshow(grid_matrix, cmap=plt.cm.tab20)
-            # ax.scatter(start_x, start_y, marker="*", color="yellow", s=300)
-            # ax.scatter((end_x - 12), end_y, marker="*", color="red", s=300)
-            # plt.show()
+            aStar_path = fun.aStar(map_matrix, start_y, start_x, end_y, end_x)
 
-            # print("Ceros: ", np.count_nonzero(grid_matrix == 0))
-            # print("Unos: ", np.count_nonzero(grid_matrix == 1))
+            path_image = fun.pathToImage(obstacles_image, aStar_path)
+
+            commands = fun.getCommands(aStar_path)
+
+            commands_meters = fun.pixelsToMeters(commands)
+            # print(commands)
+            # print("---------------------")
+            # print(commands_meters)
+
+            # cv2.imshow("FatImage", map_matrix)
+            # cv2.imshow("PathFinder", pf_path_image)
+            cv2.imshow("A Star", path_image)
+
+            # ------------------------------------- END TESTING -------------------------------------
 
             corners_image = fun.detectCorners(white_mask)
             # cv2.imshow("Corners", corners_image)
@@ -151,12 +145,12 @@ if clientID != -1:
         if keypress == ord('q'):
             break
 
-        res, position = sim.simxGetObjectPosition(
-            clientID, body, floor, sim.simx_opmode_oneshot)
-        if res == sim.simx_return_ok:
-            print("X: ", round(position[0], 0))
-            print("Y: ", round(position[1], 0))
-            print("Z: ", round(position[2], 0))
+        # res, position = sim.simxGetObjectPosition(
+        #     clientID, body, floor, sim.simx_opmode_oneshot)
+        # if res == sim.simx_return_ok:
+        #     print("X: ", round(position[0], 0))
+        #     print("Y: ", round(position[1], 0))
+        #     print("Z: ", round(position[2], 0))
 
 else:
     print('Could not connect to remote API server')

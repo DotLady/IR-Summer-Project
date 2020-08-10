@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 from matplotlib import colors
-import heapq
+import tcod
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
@@ -20,7 +20,7 @@ def findColorsMasks(original):
 
     # Red colour
     redMin_1 = np.array([0, 120, 20])
-    redMax_1 = np.array([10, 255, 255])
+    redMax_1 = np.array([15, 255, 255])
     redMin_2 = np.array([170, 120, 20])
     redMax_2 = np.array([180, 255, 255])
     red_mask_1 = cv2.inRange(hsv_image, redMin_1, redMax_1)
@@ -37,9 +37,14 @@ def findColorsMasks(original):
     greenMax_tree = np.array([80, 120, 255])
     tree_mask = cv2.inRange(hsv_image, greenMin_tree, greenMax_tree)
 
-    lower_white = np.array([0, 0, 0])
+    lower_white = np.array([0, 0, 255])
     upper_white = np.array([0, 0, 255])
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
+
+    # lower_brown = np.array([0, 50, 20])
+    # upper_brown = np.array([200, 150, 100])
+    # brown_mask = cv2.inRange(hsv_image, lower_brown, upper_brown)
+    # cv2.imshow("Brown", brown_mask)
 
     return hospital_mask, car_mask, tree_mask, white_mask
 
@@ -174,7 +179,8 @@ def detectBlobs(given_image):
     return im_with_keypoints
 
 
-def createMap(grid_matrix):
+def createFatMap(grid_matrix):
+    print("Making walls thicker...")
     map_matrix = np.copy(grid_matrix)
 
     size_y = len(grid_matrix)
@@ -182,143 +188,139 @@ def createMap(grid_matrix):
 
     for y in range(size_y):
         for x in range(size_x):
-            if (grid_matrix[y][x] == 1):
-                if (x > 0):
-                    map_matrix[y][x-1] = 1
-                if (x < size_x-1):
-                    map_matrix[y][x+1] = 1
-                if (y > 0):
-                    map_matrix[y-1][x] = 1
-                if (y < size_y-1):
-                    map_matrix[y+1][x] = 1
+            if (grid_matrix[y][x] == 255):
+                cv2.circle(map_matrix, (x, y), 10, 255, -1)
 
     return map_matrix
 
-# Node class for the A* algorithm
+
+def pathToImage(obstacles_image, path):
+    path_image = np.copy(obstacles_image)
+    path_image = cv2.cvtColor(obstacles_image, cv2.COLOR_GRAY2RGB)
+
+    for point in path:
+        # path_image[point[0]][point[1]] = 255
+        cv2.circle(path_image, (point[1], point[0]), 1, (50, 3, 255), -1)
+
+    cv2.circle(path_image, (path[0][1], path[0][0]), 6, (104, 255, 3), -1)
+    cv2.circle(path_image, (path[-1][1], path[-1][0]), 6, (255, 3, 214), -1)
+
+    return path_image
 
 
-class Node:
-    def __init__(self, parent=None, position=None):
-        self.parent = parent
-        self.position = position
+def mapToCostMatrix(map_matrix):
+    cost_matrix = np.ones((IMG_HEIGHT, IMG_WIDTH), dtype=np.int8)
 
-        self.start_distance = 0
-        self.end_distance = 0
-        self.total_score = 0
+    for i in range(len(map_matrix)):
+        for j in range(len(map_matrix[0])):
+            if map_matrix[i][j] == 255:
+                cost_matrix[i][j] = 0
 
-    def __eq__(self, other):
-        return self.position == other.position
+    return cost_matrix
 
 
-def return_path(current_node, maze):
-    path = []
-    num_rows, num_cols = np.shape(maze)
-    result = [[-1 for i in range(num_cols)] for j in range(num_rows)]
-    current = current_node
+def pathFinder(map_matrix, start_y, start_x, end_y, end_x):
+    print("Finding path...")
+    cost_matrix = mapToCostMatrix(map_matrix)
 
-    while current is not None:
-        path.append(current.position)
-        print(current.position)
-        current = current.parent
-    path = path[::-1]  # Return reversed path
+    graph = tcod.path.SimpleGraph(cost=cost_matrix, cardinal=1, diagonal=3)
+    pf = tcod.path.Pathfinder(graph)
+    pf.add_root((start_y, start_x))
+    path_list = pf.path_to((end_y, end_x)).tolist()
+
+    return path_list
+
+
+def aStar(map_matrix, start_y, start_x, end_y, end_x):
+    print("Finding path...")
+    cost_matrix = mapToCostMatrix(map_matrix)
+
+    aStar_graph = tcod.path.AStar(cost_matrix, 0)
+    path_list = aStar_graph.get_path(start_y, start_x, end_y, end_x)
+
+    return path_list
+
+
+def getCommands(path):
+    print("Getting commands for ground robot...")
+    detailed_commands = []
+    general_commands = []
 
     for i in range(len(path) - 1):
-        if (path[i+1][0] == path[i][0]):
-            if (path[i+1][1] > path[i][1]):
-                print("Move East towards position ", path[i+1])
-                print("(", path[i+1][0], ",", path[i+1][1], ", 90 )")
+        command = [path[i+1][0], path[i+1][1]]
+        if path[i][0] == path[i+1][0]:
+            if path[i][1] > path[i+1][1]:
+                # print("Izquierda")
+                command.append(270)
             else:
-                print("Move West towards position ", path[i+1])
-                print("(", path[i+1][0], ",", path[i+1][1], ", 270 )")
-        elif (path[i+1][0] < path[i][0]):
-            print("Move North towards position ", path[i+1])
-            print("(", path[i+1][0], ",", path[i+1][1], ", 180 )")
-        else:
-            print("Move South towards position ", path[i+1])
-            print("(", path[i+1][0], ",", path[i+1][1], ", 0 )")
+                # print("Derecha")
+                command.append(90)
+        elif path[i][1] == path[i+1][1]:
+            if path[i][0] > path[i+1][0]:
+                # print("Norte")
+                command.append(180)
+            else:
+                # print("Sur")
+                command.append(0)
+        elif path[i][0] > path[i+1][0]:
+            if path[i][1] > path[i+1][1]:
+                # print("Diagonal superior izquierda")
+                command.append(225)
+            elif path[i][1] < path[i+1][1]:
+                # print("Diagonal superior derecha")
+                command.append(135)
+        elif path[i][0] < path[i+1][0]:
+            if path[i][1] > path[i+1][1]:
+                # print("Diagonal inferior izquierda")
+                command.append(315)
+            elif path[i][1] < path[i+1][1]:
+                # print("Diagonal inferior derecha")
+                command.append(45)
+        detailed_commands.append(command)
 
-    start_value = 0
-    for i in range(len(path)):
-        result[path[i][0]][path[i][1]] = start_value
-        start_value += 1
+    for i in range(len(detailed_commands)-1):
+        if (detailed_commands[i+1][2] != detailed_commands[i][2]):
+            general_commands.append(detailed_commands[i])
 
-    return result
+    # Add the END point to command list
+    general_commands.append(detailed_commands[-1])
+
+    return general_commands
 
 
-def searchPath(maze, cost, start, end):
-    start_node = Node(None, tuple(start))
-    start_node.start_distance = start_node.end_distance = start_node.total_score = 0
-    end_node = Node(None, tuple(end))
-    end_node.start_distance = end_node.end_distance = end_node.total_score = 0
+def pixelsToMeters(commands_list):
+    commands_meters = np.copy(commands_list)
+    commands_meters = [[float(x) for x in sublist]
+                       for sublist in commands_meters]
 
-    # Initialize both open and closed list
-    yet_to_visit_list = []
-    visited_list = []
-    yet_to_visit_list.append(start_node)
+    for i in range(len(commands_list)):
+        # Y coordinates (vertical)
+        if commands_list[i][0] == 0:
+            commands_meters[i][0] = 10
+        elif commands_list[i][0] > 0:
+            if commands_list[i][0] < 256:
+                commands_meters[i][0] = commands_list[i][0]*10/512
+            elif commands_list[i][0] == 256:
+                commands_meters[i][0] = 0
+            elif commands_list[i][0] == 512:
+                commands_meters[i][0] = -10
+            else:
+                commands_meters[i][0] = -(commands_list[i][0]*10/512)
 
-    outer_iterations = 0
-    max_iterations = (len(np.floor_divide(maze, 2))) ** 10
+        # X coordinates (horizontal)
+        if commands_list[i][1] == 0:
+            commands_meters[i][1] = -10
+        elif commands_list[i][1] > 0:
+            if commands_list[i][1] < 256:
+                commands_meters[i][1] = -10 + (commands_list[i][1]*10/512)
+            elif commands_list[i][1] == 256:
+                commands_meters[i][1] = 0
+            elif commands_list[i][1] == 512:
+                commands_meters[i][1] = 10
+            else:
+                commands_meters[i][1] = commands_list[i][1]*10/512
 
-    move = [[-1, 0], [0, -1], [1, 0], [0, 1]]
+    commands_meters = [[round(x, 4) for x in sublist]
+                       for sublist in commands_meters]
 
-    num_rows, num_cols = np.shape(maze)
-
-    while len(yet_to_visit_list) > 0:
-        outer_iterations += 1
-        current_node = yet_to_visit_list[0]
-        current_index = 0
-        for index, item in enumerate(yet_to_visit_list):
-            if item.total_score < current_node.total_score:
-                current_node = item
-                current_index = index
-
-        if outer_iterations > max_iterations:
-            print("Giving up on pathfinding too many iterations")
-            return return_path(current_node, maze)
-
-        yet_to_visit_list.pop(current_index)
-        visited_list.append(current_node)
-
-        if current_node == end_node:
-            return return_path(current_node, maze)
-
-        children = []
-
-        for new_position in move:  # Adjacent squares
-
-            # Get node position
-            node_position = (
-                current_node.position[0] + new_position[0], current_node.position[1] + new_position[1])
-
-            # Make sure within range (maze boundaries)
-            if node_position[0] > (num_rows - 1) or node_position[0] < 0 or node_position[1] > (num_cols - 1) or node_position[1] < 0:
-                continue
-
-            # Make sure walkable terrain
-            if maze[node_position[0]][node_position[1]] != 0:
-                continue
-
-            # Create new node
-            new_node = Node(current_node, node_position)
-
-            # Append
-            children.append(new_node)
-
-        # Loop through children
-        for child in children:
-            # Child is on the closed list
-            if len([visited_child for visited_child in visited_list if visited_child == child]) > 0:
-                continue
-
-            # Create the f, start_distance, and h values
-            child.start_distance = current_node.start_distance + cost
-            child.end_distance = ((child.position[0] - end_node.position[0]) ** 2) + (
-                (child.position[1] - end_node.position[1]) ** 2)
-            child.total_score = child.start_distance + child.end_distance
-
-            # Child is already in the open list
-            if len([i for i in yet_to_visit_list if child == i and child.start_distance > i.start_distance]) > 0:
-                continue
-
-            # Add the child to the open list
-            yet_to_visit_list.append(child)
+    return commands_meters

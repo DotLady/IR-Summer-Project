@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 
 
 class Node:
@@ -76,7 +77,7 @@ def return_path(current_node, maze):
     return result
 
 
-def search(maze, cost, start, end):
+def ASearch(maze, cost, start, end):
     start_node = Node(None, tuple(start))
     start_node.start_distance = start_node.end_distance = start_node.total_score = 0
     end_node = Node(None, tuple(end))
@@ -180,7 +181,7 @@ if __name__ == '__main__':
     end = [0, 9]
     cost = 1
     maze_final = createMap(maze)
-    path = search(maze_final, cost, start, end)
+    path = ASearch(maze_final, cost, start, end)
 
     # Print matrix path
     print('\n'.join([''.join(["{:" ">3d}".format(item)
