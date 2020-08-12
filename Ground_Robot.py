@@ -9,6 +9,10 @@ import Ground_Functions as fun_gnd
 from matplotlib import pyplot as plt
 from matplotlib import colors
 
+SPEED = 2.0
+IMG_WIDTH = 512
+IMG_HEIGHT = 512
+
 
 # -------------------------------------- START PROGRAM --------------------------------------
 # Start Program and just in case, close all opened connections
@@ -16,14 +20,14 @@ print('Program started')
 sim.simxFinish(-1)
 
 # Connect to simulator running on localhost
-clientID = sim.simxStart('127.0.0.1', 19999, True, True, 5000, 5)
+clientID = sim.simxStart('127.0.0.1', 19998, True, True, 5000, 5)
 
 # Connect to the simulation
 if clientID != -1:
     print('Connected to remote API server')
 
     # Get handles to simulation objects
-    print('Obtaining handles of simulation objects')
+    print('Obtaining handles of simulation objects...')
 
     # Ground robot's perspective vision sensor
     res, camera_gnd = sim.simxGetObjectHandle(
@@ -37,11 +41,31 @@ if clientID != -1:
     if res != sim.simx_return_ok:
         print('Could not get handle to Proximity Sensor')
 
-    # Body
+    # Ground robot body
     res, body_gnd = sim.simxGetObjectHandle(
-        clientID, 'Robotnik_Summit_XL', sim.simx_opmode_oneshot_wait)
+        clientID, 'Ground_robot', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
+
+    # Wheel drive motors
+    res, leftMotor = sim.simxGetObjectHandle(
+        clientID, 'leftMotor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to leftMotor')
+    res, rightMotor = sim.simxGetObjectHandle(
+        clientID, 'rightMotor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to rightMotor')
+
+    # Wheels
+    res, leftWheel = sim.simxGetObjectHandle(
+        clientID, 'leftWheel', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to leftWheel')
+    res, rightWheel = sim.simxGetObjectHandle(
+        clientID, 'rightWheel', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to rightWheel')
 
     # Floor
     res, floor = sim.simxGetObjectHandle(
@@ -86,6 +110,11 @@ if clientID != -1:
         else:
             # Something else has happened
             print("Unexpected error returned", res)
+
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, SPEED, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, SPEED, sim.simx_opmode_oneshot)
 
         keypress = cv2.waitKey(1) & 0xFF
         if keypress == ord('q'):

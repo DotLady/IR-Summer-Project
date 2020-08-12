@@ -36,7 +36,7 @@ if clientID != -1:
     print('Connected to remote API server')
 
     # Get handles to simulation objects
-    print('Obtaining handles of simulation objects')
+    print('Obtaining handles of simulation objects...')
 
     # Floor orthographic camera for exploration
     res, camera_orth = sim.simxGetObjectHandle(
@@ -78,7 +78,7 @@ if clientID != -1:
             # cv2.imshow("Camera", original)
 
             # Find masks for hospital, car and obstacles
-            hospital_mask, car_mask, tree_mask, white_mask = fun.findColorsMasks(
+            hospital_mask, car_mask, tree_mask, white_obstacle_mask = fun.findColorsMasks(
                 original)
 
             # Find START and END coordinates
@@ -94,8 +94,8 @@ if clientID != -1:
             # cv2.imshow("CarMask", center_car_image)
 
             # Finding a path fron START to END
-            obstacles_image = cv2.bitwise_or(tree_mask, white_mask)
-            thick_mask = fun.createFatMap(white_mask)
+            obstacles_image = cv2.bitwise_or(tree_mask, white_obstacle_mask)
+            thick_mask = fun.createFatMap(white_obstacle_mask)
             map_matrix = cv2.bitwise_or(tree_mask, thick_mask)
 
             # # Save map image
@@ -115,20 +115,18 @@ if clientID != -1:
             commands = fun.getCommands(aStar_path)
 
             commands_meters = fun.pixelsToMeters(commands)
-            # print(commands)
-            # print("---------------------")
-            # print(commands_meters)
 
-            # cv2.imshow("FatImage", map_matrix)
+            cv2.imshow("FatImage", map_matrix)
             # cv2.imshow("PathFinder", pf_path_image)
+
             cv2.imshow("A Star", path_image)
 
             # ------------------------------------- END TESTING -------------------------------------
 
-            corners_image = fun.detectCorners(white_mask)
+            corners_image = fun.detectCorners(white_obstacle_mask)
             # cv2.imshow("Corners", corners_image)
 
-            contours_image = fun.detectContours(white_mask)
+            contours_image = fun.detectContours(white_obstacle_mask)
             # im_with_keypoints = detectBlobs(obstacle_mask)
             # Show keypoints
             # cv2.imshow("Contours", contours_image)

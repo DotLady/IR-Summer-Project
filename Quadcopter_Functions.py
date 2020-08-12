@@ -27,26 +27,35 @@ def findColorsMasks(original):
     red_mask_2 = cv2.inRange(hsv_image, redMin_2, redMax_2)
     car_mask = cv2.bitwise_or(red_mask_1, red_mask_2)
 
-    # Blue colour
+    # Hospital blue colour
     blueMin = np.array([85, 120, 20])
     blueMax = np.array([135, 255, 255])
     hospital_mask = cv2.inRange(hsv_image, blueMin, blueMax)
+
+    # Ground robot blue colour
+    blueMin = np.array([0, 255, 255])
+    blueMax = np.array([0, 255, 255])
+    robot_mask = cv2.inRange(hsv_image, blueMin, blueMax)
 
     # Green tree colour
     greenMin_tree = np.array([40, 0, 20])
     greenMax_tree = np.array([80, 120, 255])
     tree_mask = cv2.inRange(hsv_image, greenMin_tree, greenMax_tree)
 
-    lower_white = np.array([0, 0, 255])
+    # Detecting ceilings and walls
+    lower_white = np.array([0, 0, 252])
     upper_white = np.array([0, 0, 255])
     white_mask = cv2.inRange(hsv_image, lower_white, upper_white)
 
-    # lower_brown = np.array([0, 50, 20])
-    # upper_brown = np.array([200, 150, 100])
-    # brown_mask = cv2.inRange(hsv_image, lower_brown, upper_brown)
-    # cv2.imshow("Brown", brown_mask)
+    # Detecting the concrete block
+    lower_gray = np.array([0, 0, 200])
+    upper_gray = np.array([2, 0, 202])
+    gray_mask = cv2.inRange(hsv_image, lower_gray, upper_gray)
 
-    return hospital_mask, car_mask, tree_mask, white_mask
+    # Detecting ceilings, walls, and concrete blocks
+    white_obstacle_mask = cv2.bitwise_or(white_mask, gray_mask)
+
+    return hospital_mask, car_mask, tree_mask, white_obstacle_mask
 
 
 def regionOfInterest(given_image, roi_ratios):
