@@ -13,21 +13,20 @@ import matplotlib as mpl
 import Quadcopter_Functions as fun
 from matplotlib import pyplot as plt
 from matplotlib import colors
+import time
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 
 grid_matrix = np.zeros((512, 512))
-
-
+drone_viewposition = [0,0,8]
+repeatseed = 0
 # -------------------------------------- START PROGRAM --------------------------------------
 # Start Program and just in case, close all opened connections
-print('Program started')
-sim.simxFinish(-1)
 
 # Connect to simulator running on localhost
 # V-REP runs on port 19997, a script opens the API on port 19999
-clientID = sim.simxStart('127.0.0.1', 19999, True, True, 5000, 5)
+clientID = sim.simxStart('127.0.0.1', 19999, True, True, 5000, 3)
 
 # Connect to the simulation
 if clientID != -1:
@@ -35,7 +34,13 @@ if clientID != -1:
 
     # Get handles to simulation objects
     print('Obtaining handles of simulation objects')
+    res,leftMotor = sim.simxGetObjectHandle(clientID, 'leftMotor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok: print('Could not get handle to leftMotor')
+    res,rightMotor = sim.simxGetObjectHandle(clientID, 'rightMotor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok: print('Could not get handle to rightMotor')
+    
 
+    
     # Floor perspective camera for exploration
     res, camera_pers = sim.simxGetObjectHandle(
         clientID, 'Vision_sensor', sim.simx_opmode_oneshot_wait)
@@ -48,6 +53,20 @@ if clientID != -1:
     if res != sim.simx_return_ok:
         print('Could not get handle to Camera')
 
+    res, floor = sim.simxGetObjectHandle(
+        clientID, 'ResizableFloor_5_25', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get hanlde of floor')
+    
+    res, drone_base_hanlde = sim.simxGetObjectHandle(
+        clientID, 'Quadricopter_base', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get hanlde of drone base')
+
+    res, drone_target_hanlde = sim.simxGetObjectHandle(
+        clientID, 'Quadricopter_target', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get hanlde of drone target')
 
 # -------------------------------------- Main Control Loop --------------------------------------
 
@@ -59,13 +78,57 @@ if clientID != -1:
     res, resolution, image_orth = sim.simxGetVisionSensorImage(
         clientID, camera_orth, 0, sim.simx_opmode_streaming)
 
+
     while (sim.simxGetConnectionId(clientID) != -1):
-        # Get image from Camera
+        
+        sim.simxSetJointTargetVelocity(clientID, leftMotor, 1.0, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(clientID, rightMotor, 1.0, sim.simx_opmode_oneshot)
+        # Get image from CameraAa
         res_pers, resolution, image_pers = sim.simxGetVisionSensorImage(
             clientID, camera_pers, 0, sim.simx_opmode_buffer)
         res, resolution, image_orth = sim.simxGetVisionSensorImage(
             clientID, camera_orth, 0, sim.simx_opmode_buffer)
 
+        #get drone position
+        drone_base_position =  sim.simxGetObjectPosition(clientID, drone_base_hanlde, floor, sim.simx_opmode_blocking)
+        drone_target_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        print(drone_base_position)
+        
+        #Drone move in z axis
+        if(drone_base_position[1][2] <= 8 and repeatseed == 0 ):
+            repeatseed = 1
+            for i in range(int(drone_base_position[1][2]+1),9):
+                drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0],drone_base_position[1][1],i], sim.simx_opmode_blocking)
+                print(drone_base_position)
+                time.sleep(2)
+        #Drone move in x axis
+        if(drone_base_position[1][0] !=0 and repeatseed == 1):
+            repeatseed = 2
+            drone_x_sign = drone_base_position[1][0] / abs(drone_base_position[1][0])
+            for i in range(1,((int(abs(drone_base_position[1][0])))*10)+1):
+                drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0] - drone_x_sign*0.1
+                                                                                 ,drone_base_position[1][1],drone_base_position[1][2]], sim.simx_opmode_blocking)
+                print(drone_base_position)
+                time.sleep(0.1)
+            time.sleep(4)
+            drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+            print(drone_base_position)
+        
+        if(drone_base_position[1][0] !=0 and repeatseed == 2):
+            repeatseed = 3
+            drone_y_sign = drone_base_position[1][1] / abs(drone_base_position[1][1])
+            for i in range(1,((int(abs(drone_base_position[1][1])))*10)+1):
+                drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0]
+                                                                                 ,drone_base_position[1][1] - drone_y_sign*0.1, drone_base_position[1][2]], sim.simx_opmode_blocking)
+                print(drone_base_position)
+                time.sleep(0.1)
+            time.sleep(4)
+            drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+            print(drone_base_position)
+        #image process
         if res == sim.simx_return_ok:
             original = np.array(image_orth, dtype=np.uint8)
             original.resize([resolution[0], resolution[1], 3])
@@ -126,6 +189,10 @@ if clientID != -1:
         keypress = cv2.waitKey(1) & 0xFF
         if keypress == ord('q'):
             break
+        
+        #drone move to center
+
+        
 else:
     print('Could not connect to remote API server')
 
