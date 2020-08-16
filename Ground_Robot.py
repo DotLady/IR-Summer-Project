@@ -3,15 +3,14 @@
 import sim
 import cv2
 import numpy as np
-import matplotlib as mpl
+import Main_Functions as main_fun
 import Quadcopter_Functions as fun
 import Ground_Functions as fun_gnd
-from matplotlib import pyplot as plt
-from matplotlib import colors
 
-SPEED = 2.0
+
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
+delta = 0.0
 
 
 # -------------------------------------- START PROGRAM --------------------------------------
@@ -30,7 +29,7 @@ if clientID != -1:
     print('Obtaining handles of simulation objects...')
 
     # Ground robot's perspective vision sensor
-    res, camera_gnd = sim.simxGetObjectHandle(
+    res, camera = sim.simxGetObjectHandle(
         clientID, 'ground_vision_sensor', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Camera')
@@ -42,8 +41,8 @@ if clientID != -1:
         print('Could not get handle to Proximity Sensor')
 
     # Ground robot body
-    res, body_gnd = sim.simxGetObjectHandle(
-        clientID, 'Ground_robot', sim.simx_opmode_oneshot_wait)
+    res, body = sim.simxGetObjectHandle(
+        clientID, 'Shape', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
@@ -79,30 +78,34 @@ if clientID != -1:
     # Start main control loop
     print('Starting control loop')
 
-    res, resolution, image_gnd = sim.simxGetVisionSensorImage(
-        clientID, camera_gnd, 0, sim.simx_opmode_streaming)
+    res, resolution, image = sim.simxGetVisionSensorImage(
+        clientID, camera, 0, sim.simx_opmode_streaming)
 
     while (sim.simxGetConnectionId(clientID) != -1):
         # Get image from Camera
-        res, resolution, image_gnd = sim.simxGetVisionSensorImage(
-            clientID, camera_gnd, 0, sim.simx_opmode_buffer)
+        res, resolution, image = sim.simxGetVisionSensorImage(
+            clientID, camera, 0, sim.simx_opmode_buffer)
+
+        # unique_values, delta = main_fun.currentVisionState(
+        #     'FINDING_TEDDY', res, resolution, image_gnd)
+        tshirt_x = IMG_WIDTH/2
 
         if res == sim.simx_return_ok:
-            original = np.array(image_gnd, dtype=np.uint8)
+            original = np.array(image, dtype=np.uint8)
             original.resize([resolution[0], resolution[1], 3])
             original = cv2.flip(original, 0)
             original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
-            # cv2.imshow("Camera", original)
 
             # Find mask for Mr York's tshirt
-            tshirt_mask = fun_gnd.findTeddy(original)
-            # cv2.imshow("Mask", tshirt_mask)
+            tshirt_mask = fun_gnd.findBearMask(original)
 
-            # Find START and END coordinates
+            values = list(tshirt_mask)
+            unique_values = np.unique(values)
+
+            # Finding centre of mass of Mr York's tshirt
             tshirt_image, tshirt_x, tshirt_y = fun.detectCenterOfMass(
                 tshirt_mask, True)
             cv2.imshow("Center_of_Tshirt", tshirt_image)
-            #print("Center of tshirt: (", tshirt_x, ", ", tshirt_y, ")")
 
         elif res == sim.simx_return_novalue_flag:
             # Camera has not started or is not returning images
@@ -111,10 +114,20 @@ if clientID != -1:
             # Something else has happened
             print("Unexpected error returned", res)
 
-        sim.simxSetJointTargetVelocity(
-            clientID, leftMotor, SPEED, sim.simx_opmode_oneshot)
-        sim.simxSetJointTargetVelocity(
-            clientID, rightMotor, SPEED, sim.simx_opmode_oneshot)
+        # Calculated offset
+        delta = fun_gnd.controllerMove(tshirt_x)
+
+        # Look up for Mr York and move towards him
+        if (len(unique_values) == 1):
+            if (unique_values[0] == 0):
+                fun_gnd.groundMovement(
+                    'TURN_RIGHT', clientID, leftMotor, rightMotor, delta)
+            if (unique_values[0] == 255):
+                fun_gnd.groundMovement(
+                    'STOP', clientID, leftMotor, rightMotor, delta)
+        else:
+            fun_gnd.groundMovement('FORWARD', clientID,
+                                   leftMotor, rightMotor, delta)
 
         keypress = cv2.waitKey(1) & 0xFF
         if keypress == ord('q'):

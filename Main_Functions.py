@@ -1,16 +1,70 @@
-'''File that includes all the functions used in the Quadcopter.py file'''
-
 import sim
 import cv2
 import numpy as np
+import matplotlib as mpl
 import tcod
 
+SPEED = 5.0
+K_GAIN = 1.2
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 PIXELS_PER_METER = 25.6
 # GRND_BOT_SIZE = 1
 
 # Find the masks by color (red, green and blue)
+
+
+def handleObjects(clientID_drone, clientID_gnd):
+    # --------------------------------- DRONE ---------------------------------
+    # Floor orthographic camera for exploration
+    res, camera_drone = sim.simxGetObjectHandle(
+        clientID_drone, 'Vision_sensor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Camera')
+
+    # Body
+    res, body_drone = sim.simxGetObjectHandle(
+        clientID_drone, 'Quadricopter_target', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Robot')
+
+    # --------------------------------- GROUND ROBOT ---------------------------------
+    # Ground robot's perspective vision sensor
+    res, camera_gnd = sim.simxGetObjectHandle(
+        clientID_gnd, 'ground_vision_sensor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Camera')
+
+    # Floor proximity ir sensor
+    res, ir_sensor = sim.simxGetObjectHandle(
+        clientID_gnd, 'ground_IR_sensor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Proximity Sensor')
+
+    # Ground robot body
+    res, body_gnd = sim.simxGetObjectHandle(
+        clientID_gnd, 'Shape', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Robot')
+
+    # Wheel drive motors
+    res, leftMotor = sim.simxGetObjectHandle(
+        clientID_gnd, 'leftMotor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to leftMotor')
+    res, rightMotor = sim.simxGetObjectHandle(
+        clientID_gnd, 'rightMotor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to rightMotor')
+
+    # --------------------------------- GENERAL ---------------------------------
+    # Floor
+    res, floor = sim.simxGetObjectHandle(
+        clientID_gnd, 'ResizableFloor_5_25', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Floor')
+
+    return camera_drone, body_drone, camera_gnd, ir_sensor, body_gnd, leftMotor, rightMotor, floor
 
 
 def findColorsMasks(original):
@@ -24,11 +78,6 @@ def findColorsMasks(original):
     red_mask_1 = cv2.inRange(hsv_image, redMin_1, redMax_1)
     red_mask_2 = cv2.inRange(hsv_image, redMin_2, redMax_2)
     car_mask = cv2.bitwise_or(red_mask_1, red_mask_2)
-
-    # Hospital blue colour
-    # blueMin = np.array([85, 120, 20])
-    # blueMax = np.array([135, 255, 255])
-    # hospital_mask = cv2.inRange(hsv_image, blueMin, blueMax)
 
     # Ground robot blue colour
     blueMin = np.array([85, 120, 255])
@@ -56,25 +105,15 @@ def findColorsMasks(original):
     return robot_mask, car_mask, tree_mask, white_obstacle_mask
 
 
-def regionOfInterest(given_image, roi_ratios):
-    x_ratio_start = roi_ratios[0]
-    y_ratio_start = roi_ratios[1]
-    x_ratio_end = roi_ratios[2]
-    y_ratio_end = roi_ratios[3]
-    mask = np.zeros_like(given_image)
+def findBearMask(original):
+    hsv_image = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
 
-    # -------------------------------------------------------------------------
-    # | (x_ratio_start, y_ratio_start)           (x_ratio_end, y_ratio_start) |
-    # |                                                                       |
-    # | (x_ratio_start, y_ratio_end)             (x_ratio_end, y_ratio_end)   |
-    # -------------------------------------------------------------------------
+    # Green tshirt colour
+    greenMin_tshirt = np.array([40, 120, 20])
+    greenMax_tshirt = np.array([80, 255, 255])
+    tshirt_mask = cv2.inRange(hsv_image, greenMin_tshirt, greenMax_tshirt)
 
-    vertices = np.array([[IMG_WIDTH*x_ratio_start, IMG_HEIGHT*y_ratio_start], [IMG_WIDTH*x_ratio_start, IMG_HEIGHT*y_ratio_end],
-                         [IMG_WIDTH*x_ratio_end, IMG_HEIGHT*y_ratio_end], [IMG_WIDTH*x_ratio_end, IMG_HEIGHT*y_ratio_start]], np.int32)
-    cv2.fillPoly(mask, [vertices], (255, 255, 255))
-
-    return_image = cv2.bitwise_and(given_image, mask)
-    return return_image
+    return tshirt_mask
 
 
 def detectCenterOfMass(given_image, blurImage):
@@ -107,87 +146,6 @@ def detectCenterOfMass(given_image, blurImage):
     return cX, cY
 
 
-def detectCorners(given_image):
-    # color_image is in BGR
-    blur_image = cv2.medianBlur(given_image, 21)
-    color_image = cv2.cvtColor(blur_image, cv2.COLOR_GRAY2BGR)
-
-    temp_image = regionOfInterest(blur_image, [0.05, 0.05, 0.95, 0.95])
-
-    corners = cv2.goodFeaturesToTrack(temp_image, 10, 0.01, 1)
-
-    if corners is not None:
-        for corner in corners:
-            # Get the coordinates of the found corners
-            x, y = corner.ravel()
-            cv2.circle(color_image, (int(x), int(y)), 5, (0, 255, 0), -1)
-
-    return color_image
-
-
-def detectContours(given_image):
-    # color_image is in BGR
-    blur_image = cv2.medianBlur(given_image, 21)
-    color_image = cv2.cvtColor(blur_image, cv2.COLOR_GRAY2BGR)
-
-    temp_image = regionOfInterest(blur_image, [0.05, 0.05, 0.95, 0.95])
-    # obtener los contornos
-    contours, _ = cv2.findContours(
-        temp_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-    # dibujar los contornos
-    cv2.drawContours(color_image, contours, -1, (0, 0, 255), 2, cv2.LINE_AA)
-
-    return color_image
-
-
-def detectBlobs(given_image):
-    # given_image = cv2.cvtColor(given_image, cv2.COLOR_BGR2GRAY)
-    # Set up the detector with default parameters.
-    params = cv2.SimpleBlobDetector_Params()
-
-    # Change thresholds
-    params.minThreshold = 100
-    params.maxThreshold = 400
-
-    # Filter by Color.
-    params.filterByColor = True
-    params.blobColor = 255
-
-    # Filter by Area.
-    params.filterByArea = True
-    params.minArea = 5
-
-    # Filter by Circularity
-    params.filterByCircularity = True
-    params.minCircularity = 0.5
-
-    # Filter by Convexity
-    params.filterByConvexity = True
-    params.minConvexity = 0.5
-
-    # Filter by Inertia
-    params.filterByInertia = True
-    params.minInertiaRatio = 0.01
-
-    # Create a detector with the parameters
-    ver = (cv2.__version__).split('.')
-    if int(ver[0]) < 3:
-        detector = cv2.SimpleBlobDetector(params)
-    else:
-        detector = cv2.SimpleBlobDetector_create(params)
-
-    # Detect blobs
-    keypoints = detector.detect(given_image)
-
-    # Draw detected blobs as red circles.
-    # cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS ensures the size of the circle corresponds to the size of blob
-    im_with_keypoints = cv2.drawKeypoints(given_image, keypoints, np.array(
-        []), (0, 0, 255), cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
-
-    return im_with_keypoints
-
-
 def createFatMap(grid_matrix):
     print("Making walls thicker...")
     map_matrix = np.copy(grid_matrix)
@@ -214,24 +172,6 @@ def pathToImage(obstacles_image, path):
     cv2.circle(path_image, (path[-1][1], path[-1][0]), 6, (255, 3, 214), -1)
 
     return path_image
-
-
-def pathFinder(map_matrix, start_y, start_x, end_y, end_x):
-    cost_matrix = np.ones((IMG_HEIGHT, IMG_WIDTH), dtype=np.int8)
-
-    for i in range(len(map_matrix)):
-        for j in range(len(map_matrix[0])):
-            if map_matrix[i][j] == 255:
-                cost_matrix[i][j] = 0
-
-    print("Finding path...")
-
-    graph = tcod.path.SimpleGraph(cost=cost_matrix, cardinal=1, diagonal=3)
-    pf = tcod.path.Pathfinder(graph)
-    pf.add_root((start_y, start_x))
-    path_list = pf.path_to((end_y, end_x)).tolist()
-
-    return path_list
 
 
 def aStar(map_matrix, start_y, start_x, end_y, end_x):
@@ -316,3 +256,55 @@ def pixelsToMeters(array_pixels):
         ((-array_meters[:, 1]/PIXELS_PER_METER)) + 10.0, 4)
 
     return array_meters
+
+
+def eulerAnglesToDegrees(euler_angle):
+    angle_degrees = (euler_angle*360.0)/(2*np.pi)
+
+    new_angle = angle_degrees
+
+    if angle_degrees == 360.0:
+        new_angle = 0.0
+    elif angle_degrees < 0.0:
+        new_angle += 360
+
+    return new_angle
+
+
+def groundMovement(state, clientID, leftMotor, rightMotor, delta):
+    if state == 'FORWARD':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, SPEED + delta, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, SPEED - delta, sim.simx_opmode_oneshot)
+    elif state == 'TURN_LEFT':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, -SPEED, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, SPEED, sim.simx_opmode_oneshot)
+    elif state == 'TURN_RIGHT':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, SPEED, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, -SPEED, sim.simx_opmode_oneshot)
+    elif state == 'STOP':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, 0.0, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, 0.0, sim.simx_opmode_oneshot)
+
+
+# Function to find the error between the actual center of the image
+# and the centre of mass
+def mapCenter(central_X, in_min, in_max, out_min, out_max):
+    return (central_X - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
+
+
+# The difference between the centers is considered through the
+# variable delta, which is added and substracted to the SPEED
+# of the robot's wheels
+def controllerMove(central_X):
+    error = mapCenter(central_X, 0.0, IMG_WIDTH, -1.0, 1.0)
+    delta = error*K_GAIN
+
+    return delta
