@@ -107,27 +107,30 @@ if clientID != -1:
             repeatseed = 2
             drone_x_sign = drone_base_position[1][0] / abs(drone_base_position[1][0])
             for i in range(1,((int(abs(drone_base_position[1][0])))*10)+1):
+            for i in range(1,((int(abs(drone_base_position[1][0])))*20)+1):
                 drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
                 sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0] - drone_x_sign*0.1
+                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0] - drone_x_sign*0.05
                                                                                  ,drone_base_position[1][1],drone_base_position[1][2]], sim.simx_opmode_blocking)
                 print(drone_base_position)
                 time.sleep(0.1)
-            time.sleep(4)
+            time.sleep(6)
             drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
             print(drone_base_position)
         
         if(drone_base_position[1][0] !=0 and repeatseed == 2):
             repeatseed = 3
             drone_y_sign = drone_base_position[1][1] / abs(drone_base_position[1][1])
-            for i in range(1,((int(abs(drone_base_position[1][1])))*10)+1):
+            for i in range(1,((int(abs(drone_base_position[1][1])))*20)+1):
                 drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
                 sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0]
-                                                                                 ,drone_base_position[1][1] - drone_y_sign*0.1, drone_base_position[1][2]], sim.simx_opmode_blocking)
+                                                                                 ,drone_base_position[1][1] - drone_y_sign*0.05, drone_base_position[1][2]], sim.simx_opmode_blocking)
                 print(drone_base_position)
                 time.sleep(0.1)
-            time.sleep(4)
+            time.sleep(6)
             drone_base_position = sim.simxGetObjectPosition(clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
             print(drone_base_position)
+            print(drone_target_position)
         #image process
         if res == sim.simx_return_ok:
             original = np.array(image_orth, dtype=np.uint8)
