@@ -123,10 +123,10 @@ if clientID != -1:
 
                 # When we CANNOT IDENTIFY the red Manta
 
-                corners_image = fun.detectCorners(white_obstacle_mask)
+                # corners_image = fun.detectCorners(white_obstacle_mask)
                 # cv2.imshow("Corners", corners_image)
 
-                contours_image = fun.detectContours(white_obstacle_mask)
+                # contours_image = fun.detectContours(white_obstacle_mask)
                 # im_with_keypoints = detectBlobs(obstacle_mask)
                 # Show keypoints
                 # cv2.imshow("Contours", contours_image)
