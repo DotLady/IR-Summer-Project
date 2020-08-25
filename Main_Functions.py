@@ -5,10 +5,12 @@ import matplotlib as mpl
 import tcod
 import time
 
-SPEED = 15.0
-K_GAIN = 15.0
+SPEED = 5.0
+K_GAIN = 5.0
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
+ONE_UNIT_DISTANCE = 6.283185307179586
+FORWARD_SPEED = 15.0
 PIXELS_PER_METER = 25.6
 # GRND_BOT_SIZE = 1
 
@@ -172,17 +174,17 @@ def findColorsMasks(original):
     tree_mask = cv2.inRange(hsv_image, np.array(
         [40, 10, 20]), np.array([80, 100, 255]))
 
-    cv2.imshow("TREE", tree_mask)
+    # cv2.imshow("TREE", tree_mask)
 
     # Detecting ceilings and walls
     white_mask = cv2.inRange(hsv_image, np.array(
         [0, 0, 252]), np.array([0, 0, 255]))
-    cv2.imshow("WALLS", white_mask)
+    # cv2.imshow("WALLS", white_mask)
 
     # Detecting the concrete block
     gray_mask = cv2.inRange(hsv_image, np.array(
         [0, 0, 200]), np.array([2, 0, 202]))
-    cv2.imshow("BLOCK", gray_mask)
+    # cv2.imshow("BLOCK", gray_mask)
 
     # Detecting ceilings, walls, and concrete blocks
     white_obstacle_mask = cv2.bitwise_or(white_mask, gray_mask)
@@ -256,10 +258,10 @@ def pathToImage(obstacles_image, path):
 
     # Save map and path image
     path_image.dtype = 'uint8'
-    status_path = cv2.imwrite(
-        'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Path_maze.jpg', path_image)
+    # status_path = cv2.imwrite(
+    #     'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Path_maze.jpg', path_image)
     # print("Path image saved status: ", status_path)
-    # cv2.imshow("Path", path_image)
+    cv2.imshow("Path", path_image)
     return path_image
 
 
@@ -311,28 +313,32 @@ def getCommands(path):
                 command.append(90)
             else:
                 # print("Right")
-                command.append(-90)
+                # command.append(-90)
+                command.append(270)
         elif path[i][1] == path[i+1][1]:
             if path[i][0] > path[i+1][0]:
                 # print("North")
                 command.append(0)
             else:
                 # print("South")
-                command.append(-180)
+                # command.append(-180)
+                command.append(180)
         elif path[i][0] > path[i+1][0]:
             if path[i][1] > path[i+1][1]:
                 # print("Upper left")
                 command.append(45)
             elif path[i][1] < path[i+1][1]:
                 # print("Upper right")
-                command.append(-45)
+                # command.append(-45)
+                command.append(315)
         elif path[i][0] < path[i+1][0]:
             if path[i][1] > path[i+1][1]:
                 # print("Lower left")
                 command.append(135)
             elif path[i][1] < path[i+1][1]:
                 # print("Lower right")
-                command.append(-135)
+                # command.append(-135)
+                command.append(225)
         detailed_commands.append(command)
 
         detailed_commands.append(command)
@@ -387,7 +393,7 @@ def pixelsToMeters(array_pixels):
 
 
 def eulerAnglesToDegrees(euler_angle):
-    angle_degrees = (euler_angle*360.0)/(2*np.pi)
+    angle_degrees = (euler_angle*180.0)/np.pi
 
     new_angle = round(angle_degrees, 1)
 
@@ -412,9 +418,9 @@ def armsMovement(clientID, left_joint, right_joint, isRescueDone):
         if (left_joint_pos < (np.pi-0.15)) and (right_joint_pos < 0.15):
             if (res_left_joint == sim.simx_return_ok) and (res_right_joint == sim.simx_return_ok):
                 sim.simxSetJointTargetVelocity(
-                    clientID, left_joint, 0.2, sim.simx_opmode_oneshot)
+                    clientID, left_joint, 0.3, sim.simx_opmode_oneshot)
                 sim.simxSetJointTargetVelocity(
-                    clientID, right_joint, -0.2, sim.simx_opmode_oneshot)
+                    clientID, right_joint, -0.3, sim.simx_opmode_oneshot)
         else:
             sim.simxSetJointTargetVelocity(
                 clientID, left_joint, 0.0, sim.simx_opmode_oneshot)
@@ -426,9 +432,9 @@ def armsMovement(clientID, left_joint, right_joint, isRescueDone):
         # The arms start closing to hug Mr. York
         if (res_left_joint == sim.simx_return_ok) and (res_right_joint == sim.simx_return_ok):
             sim.simxSetJointTargetVelocity(
-                clientID, left_joint, -0.2, sim.simx_opmode_oneshot)
+                clientID, left_joint, -0.3, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
-                clientID, right_joint, 0.2, sim.simx_opmode_oneshot)
+                clientID, right_joint, 0.3, sim.simx_opmode_oneshot)
     return False
 
 
@@ -457,19 +463,19 @@ def openArms(clientID, left_joint, right_joint, isPreparedToGo):
 def groundMovement(state, clientID, left_motor, right_motor, delta):
     if state == 'FORWARD':
         sim.simxSetJointTargetVelocity(
-            clientID, left_motor, SPEED - delta, sim.simx_opmode_oneshot)
+            clientID, left_motor, SPEED + delta, sim.simx_opmode_oneshot)
         sim.simxSetJointTargetVelocity(
-            clientID, right_motor, SPEED + delta, sim.simx_opmode_oneshot)
+            clientID, right_motor, SPEED - delta, sim.simx_opmode_oneshot)
     elif state == 'TURN_LEFT':
         sim.simxSetJointTargetVelocity(
-            clientID, left_motor, -SPEED/8.0, sim.simx_opmode_oneshot)
+            clientID, left_motor, -SPEED, sim.simx_opmode_oneshot)
         sim.simxSetJointTargetVelocity(
-            clientID, right_motor, SPEED/8.0, sim.simx_opmode_oneshot)
+            clientID, right_motor, SPEED, sim.simx_opmode_oneshot)
     elif state == 'TURN_RIGHT':
         sim.simxSetJointTargetVelocity(
-            clientID, left_motor, SPEED/8.0, sim.simx_opmode_oneshot)
+            clientID, left_motor, SPEED, sim.simx_opmode_oneshot)
         sim.simxSetJointTargetVelocity(
-            clientID, right_motor, -SPEED/8.0, sim.simx_opmode_oneshot)
+            clientID, right_motor, -SPEED, sim.simx_opmode_oneshot)
     elif state == 'STOP':
         sim.simxSetJointTargetVelocity(
             clientID, left_motor, 0.0, sim.simx_opmode_oneshot)
@@ -493,28 +499,28 @@ def controllerMove(central_X):
     return delta
 
 
-def changeangletoeurrle(angle):
+def changeAngleToEuler(angle):
     return angle*180 / np.pi
 
 
-def checkangle(angle1, angle2):
+def checkAngle(angle1, angle2):
     if angle2-1 < angle1 < angle2+1:
         return True
     else:
         return False
 
 
-def checkposition(x1, y1, x2, y2):
+def checkPosition(x1, y1, x2, y2):
     xposition = 0
     yposition = 0
-    if x2-0.5 < x1 < x2+0.5:
+    if x2-0.2 < x1 < x2+0.2:
         xposition = 1
-    if y2-0.5 < y1 < y2+0.5:
+    if y2-0.2 < y1 < y2+0.2:
         yposition = 1
     return [xposition, yposition]
 
 
-def deltaspeed(delta):
+def deltaSpeed(delta):
     if delta >= 10.0:
         delta = 10.0
         return delta

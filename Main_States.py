@@ -8,6 +8,8 @@ import time
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
+ONE_UNIT_DISTANCE = 6.283185307179586
+FORWARD_SPEED = 15.0
 
 
 def GETTING_MAP(original):
@@ -25,7 +27,7 @@ def GETTING_MAP(original):
         start_x, start_y = fun.detectCenterOfMass(robot_mask)
         # print("Ground robot centre: (", start_x, ", ", start_y, ")")
         temp_x, end_y = fun.detectCenterOfMass(manta_mask)
-        end_x = temp_x-10
+        end_x = temp_x-20
         # print("Red manta's centre: (", end_x, ", ", end_y, ")")
 
         # Finding a path fron START to END
@@ -49,11 +51,104 @@ def GETTING_MAP(original):
     path_image = fun.pathToImage(obstacles_image, aStar_path)
 
     commands = fun.getCommands(aStar_path)
+    print("Type of commands: ", type(commands))
 
     if (len(commands) != 0):
         return commands, True
     else:
         return commands, False
+
+
+def MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel, left_motor, right_motor, lastLeftWheelPosition, lastRightWheelPosition):
+
+    leftWheelDiameter = sim.simxGetObjectFloatParameter(clientID_gnd, leftWheel, 18, sim.simx_opmode_oneshot)[1] \
+        - sim.simxGetObjectFloatParameter(clientID_gnd,
+                                          leftWheel, 15, sim.simx_opmode_oneshot)[1]
+
+    # Function of wheel odometery
+    leftWheelPosition = sim.simxGetJointPosition(
+        clientID_gnd, left_motor, sim.simx_opmode_oneshot)[1]
+    dTheta = leftWheelPosition - lastLeftWheelPosition
+    if dTheta >= np.pi:
+        dTheta -= 2*np.pi
+    elif dTheta < np.pi:
+        dTheta += 2*np.pi
+    leftWheelOdom += dTheta * leftWheelDiameter / 2
+    lastLeftWheelPosition = leftWheelPosition
+
+    # Function that used to test the wheelOdom reading for moving 1 unit
+    # if -6.0<=gnd_robot_position[1][0] <=-5.9:
+    #     sim.simxSetJointTargetVelocity(
+    #         clientID, left_motor, 0.0, sim.simx_opmode_oneshot)
+    #     sim.simxSetJointTargetVelocity(
+    #         clientID, right_motor, 0.0, sim.simx_opmode_oneshot)
+    #
+    # Update the position
+    gnd_robot_position = sim.simxGetObjectPosition(
+        clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
+    gnd_robot_angle = fun.changeAngleToEuler(sim.simxGetObjectOrientation(
+        clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
+    # print(gnd_robot_angle)
+
+    # If get a path list
+    if (len(commands) >= 1):
+        # Check if the angle of ground robot is same as the list, if true check position else robot rotating
+        print(commands[0])
+        if (fun.checkAngle(gnd_robot_angle, commands[0][2]) == True):
+            sim.simxSetJointTargetVelocity(
+                clientID_gnd, left_motor, 0.0, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID_gnd, right_motor, 0.0, sim.simx_opmode_oneshot)
+
+            gnd_robot_position = sim.simxGetObjectPosition(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
+            gnd_robot_angle = fun.changeAngleToEuler(sim.simxGetObjectOrientation(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
+
+            # Function to check position, [x,y] x y are bool values, 1 means two positions are same, 0 means different
+            # will return [1,1] when arrive the position.
+            if (fun.checkPosition(gnd_robot_position[1][0], gnd_robot_position[1][1], commands[0][0], commands[0][1]) == [1, 1]):
+                sim.simxSetJointTargetVelocity(
+                    clientID_gnd, left_motor, 0.0, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID_gnd, right_motor, 0.0, sim.simx_opmode_oneshot)
+
+                gnd_robot_position = sim.simxGetObjectPosition(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
+                gnd_robot_angle = fun.changeAngleToEuler(sim.simxGetObjectOrientation(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
+
+                commands = commands[1:]
+
+            else:
+                sim.simxSetJointTargetVelocity(
+                    clientID_gnd, left_motor, 15.0, sim.simx_opmode_oneshot)
+                sim.simxSetJointTargetVelocity(
+                    clientID_gnd, right_motor, 15.0, sim.simx_opmode_oneshot)
+
+                gnd_robot_position = sim.simxGetObjectPosition(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
+                gnd_robot_angle = fun.changeAngleToEuler(sim.simxGetObjectOrientation(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
+
+        else:
+            error_angle = commands[0][2]-gnd_robot_angle
+            rotate_speed = fun.deltaSpeed(error_angle * 0.5)
+
+            sim.simxSetJointTargetVelocity(
+                clientID_gnd, left_motor, 5.0 - rotate_speed, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID_gnd, right_motor, 5.0 + rotate_speed, sim.simx_opmode_oneshot)
+
+            gnd_robot_position = sim.simxGetObjectPosition(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
+            gnd_robot_angle = fun.changeAngleToEuler(sim.simxGetObjectOrientation(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
+
+        return False
+
+    else:
+        return True
 
 
 def SEARCHING_BEAR(color_values, tshirt_x, clientID, left_motor, right_motor, prox_sensor):
