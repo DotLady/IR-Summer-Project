@@ -73,6 +73,16 @@ def handleGroundObjects(clientID):
     if res != sim.simx_return_ok:
         print('Could not get handle to rightMotor')
 
+    # Wheels
+    res, leftWheel = sim.simxGetObjectHandle(
+        clientID, 'leftWheel', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to leftWheel')
+    res, rightWheel = sim.simxGetObjectHandle(
+        clientID, 'rightWheel', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to rightWheel')
+
     # Ground robot arm joints
     res, left_joint = sim.simxGetObjectHandle(
         clientID, 'LeftJoint', sim.simx_opmode_oneshot_wait)
@@ -84,7 +94,7 @@ def handleGroundObjects(clientID):
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
-    return camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, left_joint, right_joint
+    return camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, leftWheel, rightWheel, left_joint, right_joint
 
 
 def droneInitialMovement(clientID, drone_base_handle, drone_target_handle, floor, drone_viewposition, repeatseed):
@@ -481,3 +491,35 @@ def controllerMove(central_X):
     delta = error*K_GAIN
 
     return delta
+
+
+def changeangletoeurrle(angle):
+    return angle*180 / np.pi
+
+
+def checkangle(angle1, angle2):
+    if angle2-1 < angle1 < angle2+1:
+        return True
+    else:
+        return False
+
+
+def checkposition(x1, y1, x2, y2):
+    xposition = 0
+    yposition = 0
+    if x2-0.5 < x1 < x2+0.5:
+        xposition = 1
+    if y2-0.5 < y1 < y2+0.5:
+        yposition = 1
+    return [xposition, yposition]
+
+
+def deltaspeed(delta):
+    if delta >= 10.0:
+        delta = 10.0
+        return delta
+    if delta <= -10.0:
+        delta = -10.0
+        return delta
+    else:
+        return delta

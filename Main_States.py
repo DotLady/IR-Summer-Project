@@ -86,50 +86,56 @@ def SEARCHING_BEAR(color_values, tshirt_x, clientID, left_motor, right_motor, pr
 
 
 # ---------------------------- NOT READY ----------------------------
-def FOLLOWING_PATH(state, path, clientID_gnd, body_gnd, floor, left_motor, right_motor):
-    delta = 0.0
-    # path = np.delete(path, [0, 2], axis=0)
-    print("Starting the path...")
-    res_position, position = sim.simxGetObjectPosition(
+def FOLLOWING_PATH(state, commands, clientID_gnd, body_gnd, floor, left_motor, right_motor):
+    res_position, current_position = sim.simxGetObjectPosition(
         clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)
     res_orientation, euler_orientation = sim.simxGetObjectOrientation(
         clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)
 
     if (res_position == sim.simx_return_ok) and (res_orientation == sim.simx_return_ok):
-        print("Position ready...")
-        for command in path:
-            position = sim.simxGetObjectPosition(
-                clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1]
-            pos_x = round(position[0], 4)
-            pos_y = round(position[1], 4)
-            print("Command position: ", [command[0], command[1]])
-            print("Position: ", [pos_x, pos_y])
+        print("Moving towards red manta...")
+        for command in commands:
+            # Check for the correct orientation of the ground robot
+            current_orientation = fun.eulerAnglesToDegrees(sim.simxGetObjectOrientation(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][2])
+            desired_orientation = command[2]
+            angle_diff = current_orientation - desired_orientation
 
-            if (pos_y != command[0]) or (pos_x != command[1]):
-                euler_orientation = sim.simxGetObjectOrientation(
-                    clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1]
-                orientation_degrees = fun.eulerAnglesToDegrees(
-                    round(abs(euler_orientation[2]), 0))
-
-                print("Orientation: ", orientation_degrees)
-                print("Command orientation: ", command[2])
-
-                while (orientation_degrees != command[2]):
+            while(abs(angle_diff) > 8.0):
+                if angle_diff < 0.0:
                     fun.groundMovement(
                         'TURN_LEFT', clientID_gnd, left_motor, right_motor, delta)
-                    euler_orientation = sim.simxGetObjectOrientation(
-                        clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][2]
-                    orientation_degrees = round(
-                        fun.eulerAnglesToDegrees(euler_orientation), 0)
+                else:
+                    fun.groundMovement(
+                        'TURN_RIGHT', clientID_gnd, left_motor, right_motor, delta)
 
-                # print("Command position: ", [command[0], command[1]])
-                # print("Position: ", [pos_x, pos_y])
-                # while (pos_y != command[0]) or (pos_x != command[1]):
-                #     fun.groundMovement(
-                #         'FORWARD', clientID_gnd, left_motor, right_motor, delta)
-                #     position = sim.simxGetObjectPosition(
-                #         clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1]
-                #     pos_x = round(position[0], 4)
-                #     pos_y = round(position[1], 4)
-                # print("Command position: ", [command[0], command[1]])
-                # print("Position: ", [pos_x, pos_y])
+                current_orientation = fun.eulerAnglesToDegrees(sim.simxGetObjectOrientation(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][2])
+                angle_diff = current_orientation - desired_orientation
+
+            # Check for the correct position of the ground robot
+            if (abs(desired_orientation) == 90.0):
+                current_x = round(sim.simxGetObjectPosition(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][1], 2)
+                desired_x = command[1]
+                position_x_diff = abs(current_x - desired_x)
+                while (position_x_diff > 0.2):
+                    fun.groundMovement(
+                        'FORWARD', clientID_gnd, left_motor, right_motor, delta)
+                    current_x = round(sim.simxGetObjectPosition(
+                        clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][1], 2)
+                    position_x_diff = abs(current_x - desired_x)
+                    # print("X difference: ", position_x_diff)
+            else:
+                current_y = round(sim.simxGetObjectPosition(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][0], 2)
+                desired_y = command[0]
+                position_y_diff = abs(current_y - desired_y)
+                while (position_y_diff > 0.2):
+                    fun.groundMovement(
+                        'FORWARD', clientID_gnd, left_motor, right_motor, delta)
+                    current_y = round(sim.simxGetObjectPosition(
+                        clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][0], 2)
+                    position_y_diff = abs(current_y - desired_y)
+                    # print("Y difference: ", position_y_diff)
+    return False, True
