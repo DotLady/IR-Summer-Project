@@ -4,15 +4,67 @@ import sim
 import cv2
 import numpy as np
 import tcod
+import time
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 PIXELS_PER_METER = 25.6
 # GRND_BOT_SIZE = 1
 
+
+def droneInitialMovement(clientID, drone_base_hanlde, drone_target_hanlde, floor):
+    drone_base_position = sim.simxGetObjectPosition(
+        clientID, drone_base_hanlde, floor, sim.simx_opmode_blocking)
+    drone_target_position = sim.simxGetObjectPosition(
+        clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+    print(drone_base_position)
+
+    # Drone move in z axis
+    if(drone_base_position[1][2] <= 8 and repeatseed == 0):
+        repeatseed = 1
+        for i in range(int(drone_base_position[1][2]+1), 9):
+            drone_base_position = sim.simxGetObjectPosition(
+                clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+            sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
+                drone_base_position[1][0], drone_base_position[1][1], i], sim.simx_opmode_blocking)
+            print(drone_base_position)
+            time.sleep(2)
+
+    # Drone move in x axis
+    if(drone_base_position[1][0] != 0 and repeatseed == 1):
+        repeatseed = 2
+        drone_x_sign = drone_base_position[1][0] / \
+            abs(drone_base_position[1][0])
+        for i in range(1, ((int(abs(drone_base_position[1][0])))*10)+1):
+            drone_base_position = sim.simxGetObjectPosition(
+                clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+            sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
+                drone_base_position[1][0] - drone_x_sign*0.1, drone_base_position[1][1], drone_base_position[1][2]], sim.simx_opmode_blocking)
+            print(drone_base_position)
+            time.sleep(0.1)
+        time.sleep(4)
+        drone_base_position = sim.simxGetObjectPosition(
+            clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        print(drone_base_position)
+
+    if(drone_base_position[1][0] != 0 and repeatseed == 2):
+        repeatseed = 3
+        drone_y_sign = drone_base_position[1][1] / \
+            abs(drone_base_position[1][1])
+        for i in range(1, ((int(abs(drone_base_position[1][1])))*10)+1):
+            drone_base_position = sim.simxGetObjectPosition(
+                clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+            sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
+                drone_base_position[1][0], drone_base_position[1][1] - drone_y_sign*0.1, drone_base_position[1][2]], sim.simx_opmode_blocking)
+            print(drone_base_position)
+            time.sleep(0.1)
+        time.sleep(4)
+        drone_base_position = sim.simxGetObjectPosition(
+            clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        print(drone_base_position)
+
+
 # Find the masks by color (red, green and blue)
-
-
 def findColorsMasks(original):
     hsv_image = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
 
@@ -293,11 +345,15 @@ def getCommands(path):
             general_commands.append(detailed_commands[i])
 
     # Add the END point to command list
-    general_commands.append(detailed_commands[-1])
+    print("Dets: ", len(detailed_commands))
+    # general_commands.append(detailed_commands[-1])
 
     commands_meters = pixelsToMeters(general_commands)
 
-    return commands_meters
+    if(len(commands_meters) != 0):
+        return commands_meters, True
+    else:
+        return commands_meters, False
 
 
 def pixelsToMeters(array_pixels):

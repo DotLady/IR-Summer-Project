@@ -1,13 +1,17 @@
 import sim
 import cv2
 import numpy as np
+import math
 import Main_Functions as fun
 import Main_States as states
 import tcod
+import time
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 
+drone_viewposition = [0, 0, 8]
+repeatseed = 0
 grid_matrix = np.zeros((512, 512))
 
 # -------------------------------------- START PROGRAM --------------------------------------
@@ -27,95 +31,157 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
     # Get handles to simulation objects
     print('Obtaining handles of simulation objects...')
 
-    camera_drone, body_drone, camera_gnd, ir_sensor, body_gnd, leftMotor, rightMotor, floor = fun.handleObjects(
-        clientID_drone, clientID_gnd)
+    camera_drone, drone_base_handle, drone_target_handle, floor = fun.handleDroneObjects(
+        clientID_drone)
+    camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, left_joint, right_joint = fun.handleGroundObjects(
+        clientID_gnd)
 
     # Start main control loop
-    print('Starting control loop')
+    print('Starting...')
 
     res_drone, resolution_drone, image_drone = sim.simxGetVisionSensorImage(
         clientID_drone, camera_drone, 0, sim.simx_opmode_streaming)
     res_gnd, resolution_gnd, image_gnd = sim.simxGetVisionSensorImage(
         clientID_gnd, camera_gnd, 0, sim.simx_opmode_streaming)
 
+    isDroneCentered = False
     isMapReady = False
+    isPreparedToGo = False
+    isMovingToManta = False
     isLookingForBear = False
+    isRescueDone = False
+    isReadyToSearch = False
+
+    delta = 0.0
+    commands = []
+    color_values = []
 
     while (sim.simxGetConnectionId(clientID_drone) != -1) and (sim.simxGetConnectionId(clientID_gnd) != -1):
 
-        delta = 0.0
-        commands = []
+        # -------------------------------------- DRONE MOVES TO THE CENTRE OF THE SCENE --------------------------------------
 
-        if not isMapReady:
+        # Moving drone to the center of the environment
+        if (not isDroneCentered):
+            drone_viewposition, repeatseed, isDroneCentered = fun.droneInitialMovement(
+                clientID_drone, drone_base_handle, drone_target_handle, floor, drone_viewposition, repeatseed)
+
+        # If we don't have a path
+        if (not isMapReady) and isDroneCentered:
             res_drone, resolution_drone, image_drone = sim.simxGetVisionSensorImage(
                 clientID_drone, camera_drone, 0, sim.simx_opmode_buffer)
 
             if res_drone == sim.simx_return_ok:
+                time.sleep(40)
                 original = np.array(image_drone, dtype=np.uint8)
                 original.resize([resolution_drone[0], resolution_drone[1], 3])
                 original = cv2.flip(original, 0)
                 original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
 
-                path_image, commands, isMapReady = states.GETTING_MAP(original)
-
-                cv2.imshow("Path", path_image)
+                # Image processing with the drone's camera. Getting a path with A* algorithm
+                commands, isMapReady = states.GETTING_MAP(original)
 
                 if isMapReady:
-                    print("\nPath coordinates are ready!")
+                    print("\nPath is ready!")
+                    print(commands)
+                    isMovingToManta = True
                     isLookingForBear = False
 
-            elif res_drone == sim.simx_return_novalue_flag:
-                print("Wait, there's no image yet...")
-            else:
-                print("Unexpected error returned", res_drone)
+        # -------------------------------------- GROUND ROBOT MOVES TOWARDS RED MANTA --------------------------------------
 
-        keypress = cv2.waitKey(1) & 0xFF
-        if keypress == ord('q'):
-            break
+        # if isMapReady:
+        #     isPreparedToGo = fun.openArms(
+        #         clientID_gnd, left_joint, right_joint, isPreparedToGo)
 
-        # Searching and moving towards Mr York
+        if isMapReady and isMovingToManta:  # and isPreparedToGo:
+            res_position, current_position = sim.simxGetObjectPosition(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)
+            res_orientation, euler_orientation = sim.simxGetObjectOrientation(
+                clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)
+
+            if (res_position == sim.simx_return_ok) and (res_orientation == sim.simx_return_ok):
+                print("Moving towards red manta...")
+                for command in commands:
+                    # Check for the correct orientation of the ground robot
+                    current_orientation = fun.eulerAnglesToDegrees(sim.simxGetObjectOrientation(
+                        clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][2])
+                    desired_orientation = command[2]
+                    angle_diff = current_orientation - desired_orientation
+
+                    while(abs(angle_diff) > 8.0):
+                        if angle_diff < 0.0:
+                            fun.groundMovement(
+                                'TURN_LEFT', clientID_gnd, left_motor, right_motor, delta)
+                        else:
+                            fun.groundMovement(
+                                'TURN_RIGHT', clientID_gnd, left_motor, right_motor, delta)
+
+                        current_orientation = fun.eulerAnglesToDegrees(sim.simxGetObjectOrientation(
+                            clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][2])
+                        angle_diff = current_orientation - desired_orientation
+
+                    # Check for the correct position of the ground robot
+                    if (abs(desired_orientation) == 90.0):
+                        current_x = round(sim.simxGetObjectPosition(
+                            clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][1], 2)
+                        desired_x = command[1]
+                        position_x_diff = abs(current_x - desired_x)
+                        while (position_x_diff > 0.2):
+                            fun.groundMovement(
+                                'FORWARD', clientID_gnd, left_motor, right_motor, delta)
+                            current_x = round(sim.simxGetObjectPosition(
+                                clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][1], 2)
+                            position_x_diff = abs(current_x - desired_x)
+                            # print("X difference: ", position_x_diff)
+                    else:
+                        current_y = round(sim.simxGetObjectPosition(
+                            clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][0], 2)
+                        desired_y = command[0]
+                        position_y_diff = abs(current_y - desired_y)
+                        while (position_y_diff > 0.2):
+                            fun.groundMovement(
+                                'FORWARD', clientID_gnd, left_motor, right_motor, delta)
+                            current_y = round(sim.simxGetObjectPosition(
+                                clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][0], 2)
+                            position_y_diff = abs(current_y - desired_y)
+                            # print("Y difference: ", position_y_diff)
+
+                isMovingToManta = False
+                isLookingForBear = True
+
+        # -------------------------------------- GROUND ROBOT SEARCHES FOR MR YORK --------------------------------------
 
         if isLookingForBear:
+            # Prepare ground robot arms for rescuing Mr. York
+            isReadyToSearch = fun.armsMovement(
+                clientID_gnd, left_joint, right_joint, isRescueDone)
+
+            tshirt_x = IMG_WIDTH/2.0
+
             res_gnd, resolution_gnd, image_gnd = sim.simxGetVisionSensorImage(
                 clientID_gnd, camera_gnd, 0, sim.simx_opmode_buffer)
 
-            if res == sim.simx_return_ok:
+            if (res_gnd == sim.simx_return_ok) and isReadyToSearch:
                 original = np.array(image_gnd, dtype=np.uint8)
                 original.resize([resolution_gnd[0], resolution_gnd[1], 3])
                 original = cv2.flip(original, 0)
                 original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
 
-                color_values, delta = states.SEARCHING_BEAR(
-                    original, commands, clientID_gnd, body_gnd, floor, leftMotor, rightMotor)
+                # Find mask for Mr York's tshirt
+                tshirt_mask = fun.findBearMask(original)
 
-            elif res == sim.simx_return_novalue_flag:
-                print("Wait, there's no image yet")
-            else:
-                print("Unexpected error returned", res)
+                values = list(tshirt_mask)
+                color_values = np.unique(values)
 
-            # Look up for Mr York and move towards him
-            if (len(color_values) == 1):
-                if (color_values[0] == 0):
-                    fun.groundMovement(
-                        'TURN_RIGHT', clientID, leftMotor, rightMotor, delta)
-                if (color_values[0] == 255):
-                    fun.groundMovement(
-                        'STOP', clientID, leftMotor, rightMotor, delta)
-            else:
-                fun.groundMovement('FORWARD', clientID,
-                                   leftMotor, rightMotor, delta)
+                # Finding centre of mass of Mr York's tshirt
+                tshirt_x, tshirt_y = fun.detectCenterOfMass(tshirt_mask)
 
-            fun.groundMovement('STOP', clientID_gnd,
-                               leftMotor, rightMotor, delta)
+                # Look up for Mr York and move towards him
+                isRescueDone, isReadyToSearch = states.SEARCHING_BEAR(
+                    color_values, tshirt_x, clientID_gnd, left_motor, right_motor, prox_sensor)
 
-        # # ----------- IN CASE WE USE IR SENSOR -----------
-        # # Here the idea is to continue moving forward towards Mr York
-        # # until the proximity sensor detects something.
-        # # res, isDetecting, point_detected, num, vector = sim.simxReadProximitySensor(
-        # #     clientID, ir_sensor, sim.simx_opmode_oneshot)
-        # # if isDetecting:
-        # #     print("Mr York detected")
-        # #     print("Point coordinates: ", point_detected)
+        keypress = cv2.waitKey(1) & 0xFF
+        if keypress == ord('q'):
+            break
 
 else:
     print('Could not connect to remote API server')
