@@ -9,7 +9,7 @@ import time
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 ONE_UNIT_DISTANCE = 6.283185307179586
-FORWARD_SPEED = 15.0
+FORWARD_SPEED = 3.0
 
 drone_viewposition = [0, 0, 8]
 repeatseed = 0
@@ -56,7 +56,10 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
     isRescueDone = False
     isReadyToSearch = False
     isGoingBackToManta = False
+    isReturningMapReady = False
+    isWaitingForMap = False
     isGoingBackToHospital = False
+    isMrYorkSafe = False
 
     delta = 0.0
     commands = []
@@ -84,13 +87,15 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
                 original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
 
                 # Image processing with the drone's camera. Getting a path with A* algorithm
-                commands, isMapReady = states.GETTING_MAP(original)
+                commands, isMapReady = states.GETTING_MAP(
+                    original, 'MAP_TO_RESCUE')
 
                 if isMapReady:
                     print("\nPath is ready!")
                     manta_coordinates = commands[-1]
                     isMovingToManta = True
                     isLookingForBear = False
+                    isMapReady = False
 
         # -------------------------------------- GROUND ROBOT MOVES TOWARDS RED MANTA --------------------------------------
 
@@ -98,14 +103,14 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
             # isMovingToManta, isLookingForBear = states.FOLLOWING_PATH(
             #     state, commands, clientID_gnd, body_gnd, floor, left_motor, right_motor)
 
-            isLookingForBear = states.MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel,
-                                                     left_motor, right_motor, lastLeftWheelPosition, lastRightWheelPosition)
+            isLookingForBear, isMovingToManta = states.MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel,
+                                                                      left_motor, right_motor, lastLeftWheelPosition, lastRightWheelPosition)
 
         # -------------------------------------- GROUND ROBOT SEARCHES FOR MR YORK --------------------------------------
 
         if isLookingForBear:
             # Prepare ground robot arms for rescuing Mr. York
-            isReadyToSearch = fun.armsMovement(
+            isReadyToSearch, armsClosed = fun.armsMovement(
                 clientID_gnd, left_joint, right_joint, isRescueDone)
 
             tshirt_x = IMG_WIDTH/2.0
@@ -132,14 +137,10 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
                 isRescueDone, isReadyToSearch = states.SEARCHING_BEAR(
                     color_values, tshirt_x, clientID_gnd, left_motor, right_motor, prox_sensor)
 
-                res_left_joint, left_joint_pos = sim.simxGetJointPosition(
-                    clientID_gnd, left_joint, sim.simx_opmode_oneshot)
-
-                if res_left_joint == sim.simx_return_ok:
-                    if (left_joint_pos > 0.0) and isRescueDone:
-                        print("HELLO")
-                        isGoingBackToManta = True
-                        # isLookingForBear = False
+            if armsClosed:
+                isGoingBackToManta = True
+                isLookingForBear = False
+                print("Let's go back...")
 
         if isGoingBackToManta:
             # fun.getReturnAngle(manta_coordinates):
@@ -150,20 +151,25 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
             desired_y = manta_coordinates[0]
             desired_x = manta_coordinates[1]
+            # desired_y = 2.0
+            # desired_x = 9.0
             current_y = current_position[0]
             current_x = current_position[1]
 
-            desired_orientation = numpy.arctan2(
-                (desired_x-current_x), (desired_y-current_y))*180.0/numpy.pi
+            desired_orientation = np.arctan2(
+                (desired_x-current_x), (desired_y-current_y))*180.0/np.pi
             angle_diff = current_orientation - desired_orientation
 
-            while(abs(angle_diff) > 8.0):
+            while(abs(angle_diff) > 10.0):
                 if angle_diff < 0.0:
                     fun.groundMovement(
                         'TURN_LEFT', clientID_gnd, left_motor, right_motor, delta)
                 else:
                     fun.groundMovement(
                         'TURN_RIGHT', clientID_gnd, left_motor, right_motor, delta)
+                current_orientation = fun.eulerAnglesToDegrees(sim.simxGetObjectOrientation(
+                    clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][2])
+                angle_diff = current_orientation - desired_orientation
 
             position_x_diff = abs(current_x - desired_x)
             while (position_x_diff > 0.2):
@@ -175,7 +181,37 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
             fun.groundMovement('STOP', clientID_gnd,
                                left_motor, right_motor, 0.0)
-            isGoingBackToHospital = True
+            isWaitingForMap = True
+            isGoingBackToManta = False
+
+        # If we don't have a path
+        if (not isReturningMapReady) and isWaitingForMap:
+            res_drone, resolution_drone, image_drone = sim.simxGetVisionSensorImage(
+                clientID_drone, camera_drone, 0, sim.simx_opmode_buffer)
+
+            if res_drone == sim.simx_return_ok:
+                time.sleep(40)
+                original = np.array(image_drone, dtype=np.uint8)
+                original.resize([resolution_drone[0], resolution_drone[1], 3])
+                original = cv2.flip(original, 0)
+                original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
+
+                # Image processing with the drone's camera. Getting a path with A* algorithm
+                commands, isReturningMapReady = states.GETTING_MAP(
+                    original, 'MAP_TO_RETURN')
+
+                if isMapReady:
+                    print("\nReturning path is ready!")
+                    isReturningMapReady = True
+                    isWaitingForMap = False
+                    GoingBackToHospital = True
+
+        if isReturningMapReady and isGoingBackToHospital:
+            isMrYorkSafe, isGoingBackToHospital = states.MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel,
+                                                                        left_motor, right_motor, lastLeftWheelPosition, lastRightWheelPosition)
+
+        if isMrYorkSafe:
+            print("Mr York is safe now!!")
 
         keypress = cv2.waitKey(1) & 0xFF
         if keypress == ord('q'):

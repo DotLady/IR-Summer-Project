@@ -5,12 +5,12 @@ import matplotlib as mpl
 import tcod
 import time
 
-SPEED = 5.0
-K_GAIN = 5.0
+SPEED = 3.0
+K_GAIN = 3.0
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 ONE_UNIT_DISTANCE = 6.283185307179586
-FORWARD_SPEED = 15.0
+FORWARD_SPEED = 3.0
 PIXELS_PER_METER = 25.6
 # GRND_BOT_SIZE = 1
 
@@ -66,33 +66,33 @@ def handleGroundObjects(clientID):
 
     # Wheel drive motors
     res, left_motor = sim.simxGetObjectHandle(
-        clientID, 'leftMotor', sim.simx_opmode_oneshot_wait)
+        clientID, 'Left_motor', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to leftMotor')
 
     res, right_motor = sim.simxGetObjectHandle(
-        clientID, 'rightMotor', sim.simx_opmode_oneshot_wait)
+        clientID, 'Right_motor', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to rightMotor')
 
     # Wheels
     res, leftWheel = sim.simxGetObjectHandle(
-        clientID, 'leftWheel', sim.simx_opmode_oneshot_wait)
+        clientID, 'Left_wheel', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to leftWheel')
     res, rightWheel = sim.simxGetObjectHandle(
-        clientID, 'rightWheel', sim.simx_opmode_oneshot_wait)
+        clientID, 'Right_wheel', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to rightWheel')
 
     # Ground robot arm joints
     res, left_joint = sim.simxGetObjectHandle(
-        clientID, 'LeftJoint', sim.simx_opmode_oneshot_wait)
+        clientID, 'Left_joint', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
     res, right_joint = sim.simxGetObjectHandle(
-        clientID, 'RightJoint', sim.simx_opmode_oneshot_wait)
+        clientID, 'Right_joint', sim.simx_opmode_oneshot_wait)
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
@@ -155,26 +155,19 @@ def droneInitialMovement(clientID, drone_base_handle, drone_target_handle, floor
     return drone_viewposition, repeatseed, True
 
 
-# Find the masks by color (red, green and blue)
+# Find the masks by color (obstacles and ground robot)
 def findColorsMasks(original):
     hsv_image = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
-
-    # Red colour
-    red_mask_1 = cv2.inRange(hsv_image, np.array(
-        [0, 120, 20]), np.array([15, 255, 255]))
-    red_mask_2 = cv2.inRange(hsv_image, np.array(
-        [170, 120, 255]), np.array([180, 255, 255]))
-    car_mask = cv2.bitwise_or(red_mask_1, red_mask_2)
 
     # Ground robot blue colour
     robot_mask = cv2.inRange(hsv_image,
                              np.array([85, 120, 255]), np.array([95, 255, 255]))
 
     # Green tree colour
-    tree_mask = cv2.inRange(hsv_image, np.array(
-        [40, 10, 20]), np.array([80, 100, 255]))
+    # tree_mask = cv2.inRange(hsv_image, np.array(
+    #     [40, 10, 20]), np.array([80, 100, 255]))
 
-    # cv2.imshow("TREE", tree_mask)
+    cv2.imshow("TREE", tree_mask)
 
     # Detecting ceilings and walls
     white_mask = cv2.inRange(hsv_image, np.array(
@@ -189,18 +182,40 @@ def findColorsMasks(original):
     # Detecting ceilings, walls, and concrete blocks
     white_obstacle_mask = cv2.bitwise_or(white_mask, gray_mask)
 
-    return robot_mask, car_mask, tree_mask, white_obstacle_mask
+    return robot_mask, tree_mask, white_obstacle_mask
 
 
 def findBearMask(original):
     hsv_image = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
 
     # Green tshirt colour
-    greenMin_tshirt = np.array([50, 150, 20])
-    greenMax_tshirt = np.array([70, 255, 255])
-    tshirt_mask = cv2.inRange(hsv_image, greenMin_tshirt, greenMax_tshirt)
+    tshirt_mask = cv2.inRange(hsv_image, np.array(
+        [50, 150, 20]), np.array([70, 255, 255]))
 
     return tshirt_mask
+
+
+def findMantaMask(original):
+    hsv_image = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
+
+    # Red colour
+    red_mask_1 = cv2.inRange(hsv_image, np.array(
+        [0, 120, 20]), np.array([15, 255, 255]))
+    red_mask_2 = cv2.inRange(hsv_image, np.array(
+        [170, 120, 255]), np.array([180, 255, 255]))
+    car_mask = cv2.bitwise_or(red_mask_1, red_mask_2)
+
+    return car_mask
+
+
+def findHospitalMask(original):
+    hsv_image = cv2.cvtColor(original, cv2.COLOR_BGR2HSV)
+
+    # Hospital blue colour
+    hospital_mask = cv2.inRange(hsv_image, np.array(
+        [85, 120, 20]), np.array([135, 255, 255]))
+
+    return hospital_mask
 
 
 def detectCenterOfMass(given_image):
@@ -427,7 +442,7 @@ def armsMovement(clientID, left_joint, right_joint, isRescueDone):
             sim.simxSetJointTargetVelocity(
                 clientID, right_joint, 0.0, sim.simx_opmode_oneshot)
             # Once the ground robot's arms are opened, it is ready to start moving around
-            return True
+            return True, False
     else:
         # The arms start closing to hug Mr. York
         if (res_left_joint == sim.simx_return_ok) and (res_right_joint == sim.simx_return_ok):
@@ -435,7 +450,17 @@ def armsMovement(clientID, left_joint, right_joint, isRescueDone):
                 clientID, left_joint, -0.3, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
                 clientID, right_joint, 0.3, sim.simx_opmode_oneshot)
-    return False
+
+        left_joint_pos = sim.simxGetJointPosition(
+            clientID, left_joint, sim.simx_opmode_oneshot)[1]
+        if (left_joint_pos < -0.05):
+            sim.simxSetJointTargetVelocity(
+                clientID, left_joint, 0.0, sim.simx_opmode_oneshot)
+            sim.simxSetJointTargetVelocity(
+                clientID, right_joint, 0.0, sim.simx_opmode_oneshot)
+            return False, True
+
+    return False, False
 
 
 def openArms(clientID, left_joint, right_joint, isPreparedToGo):

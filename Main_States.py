@@ -9,10 +9,10 @@ import time
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 ONE_UNIT_DISTANCE = 6.283185307179586
-FORWARD_SPEED = 15.0
+FORWARD_SPEED = 3.0
 
 
-def GETTING_MAP(original):
+def GETTING_MAP(original, text):
     # cv2.imshow("Drone camera", original)
     print("Creating map...")
 
@@ -20,17 +20,9 @@ def GETTING_MAP(original):
 
     while(len(aStar_path) == 0):
         # Find masks for hospital, car and obstacles
-        robot_mask, manta_mask, tree_mask, white_obstacle_mask = fun.findColorsMasks(
+        robot_mask, tree_mask, white_obstacle_mask = fun.findColorsMasks(
             original)
 
-        # Find START and END coordinates
-        start_x, start_y = fun.detectCenterOfMass(robot_mask)
-        # print("Ground robot centre: (", start_x, ", ", start_y, ")")
-        temp_x, end_y = fun.detectCenterOfMass(manta_mask)
-        end_x = temp_x-20
-        # print("Red manta's centre: (", end_x, ", ", end_y, ")")
-
-        # Finding a path fron START to END
         obstacles_image = cv2.bitwise_or(tree_mask, white_obstacle_mask)
         cv2.imshow("ANNOYING1", obstacles_image)
         cv2.waitKey(0)
@@ -39,10 +31,24 @@ def GETTING_MAP(original):
         thick_tree = fun.createFatMap(tree_mask, 10)
         map_matrix = cv2.bitwise_or(thick_tree, thick_mask)
 
-        # # Save map and path image
-        map_matrix.dtype = 'uint8'
-        status_path = cv2.imwrite(
-            'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Thick_maze.jpg', map_matrix)
+        # Find START and END coordinates
+        start_x, start_y = fun.detectCenterOfMass(robot_mask)
+        # print("Ground robot centre: (", start_x, ", ", start_y, ")")
+
+        if (text == 'MAP_TO_RESCUE'):
+            manta_mask = fun.findMantaMask(original)
+            end_x, temp_y = fun.detectCenterOfMass(manta_mask)
+            end_y = temp_y+20
+            # print("Red manta's centre: (", end_x, ", ", end_y, ")")
+        else:
+            hospital_mask = fun.findHospitalMask(original)
+            end_x, end_y = fun.detectCenterOfMass(hospital_mask)
+            # print("Hospital's centre: (", end_x, ", ", end_y, ")")
+
+        # Save map image
+        # map_matrix.dtype = 'uint8'
+        # status_path = cv2.imwrite(
+        #     'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Thick_maze.jpg', map_matrix)
 
         # Path Finding algorithm
         aStar_path = fun.aStar(map_matrix, start_y, start_x, end_y, end_x)
@@ -51,12 +57,12 @@ def GETTING_MAP(original):
     path_image = fun.pathToImage(obstacles_image, aStar_path)
 
     commands = fun.getCommands(aStar_path)
-    print("Type of commands: ", type(commands))
+    # print("Type of commands: ", type(commands))
 
     if (len(commands) != 0):
-        return commands, True
+        return commands, end_x, end_y, True
     else:
-        return commands, False
+        return commands, 0.0, 0.0, False
 
 
 def MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel, left_motor, right_motor, lastLeftWheelPosition, lastRightWheelPosition):
@@ -122,9 +128,9 @@ def MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel, left_moto
 
             else:
                 sim.simxSetJointTargetVelocity(
-                    clientID_gnd, left_motor, 15.0, sim.simx_opmode_oneshot)
+                    clientID_gnd, left_motor, 3.0, sim.simx_opmode_oneshot)
                 sim.simxSetJointTargetVelocity(
-                    clientID_gnd, right_motor, 15.0, sim.simx_opmode_oneshot)
+                    clientID_gnd, right_motor, 3.0, sim.simx_opmode_oneshot)
 
                 gnd_robot_position = sim.simxGetObjectPosition(
                     clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
@@ -136,19 +142,19 @@ def MOVING_TO_PATH(commands, clientID_gnd, body_gnd, floor, leftWheel, left_moto
             rotate_speed = fun.deltaSpeed(error_angle * 0.5)
 
             sim.simxSetJointTargetVelocity(
-                clientID_gnd, left_motor, 5.0 - rotate_speed, sim.simx_opmode_oneshot)
+                clientID_gnd, left_motor, 1.0 - rotate_speed, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
-                clientID_gnd, right_motor, 5.0 + rotate_speed, sim.simx_opmode_oneshot)
+                clientID_gnd, right_motor, 1.0 + rotate_speed, sim.simx_opmode_oneshot)
 
             gnd_robot_position = sim.simxGetObjectPosition(
                 clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)
             gnd_robot_angle = fun.changeAngleToEuler(sim.simxGetObjectOrientation(
                 clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
 
-        return False
+        return False, True
 
     else:
-        return True
+        return True, False
 
 
 def SEARCHING_BEAR(color_values, tshirt_x, clientID, left_motor, right_motor, prox_sensor):
