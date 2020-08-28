@@ -37,7 +37,7 @@ if clientID != -1:
     print('Connected to remote API server')
 
     # Get handles to simulation objects
-    print('Obtaining handles of simulation objects...')
+    print('Obtaining handles of simulation objects')
 
     # Floor orthographic camera for exploration
     res, camera = sim.simxGetObjectHandle(
@@ -45,11 +45,10 @@ if clientID != -1:
     if res != sim.simx_return_ok:
         print('Could not get handle to Camera')
 
-    # Body
-    # res, body = sim.simxGetObjectHandle(
-    #     clientID, 'Quadricopter_target', sim.simx_opmode_oneshot_wait)
-    # if res != sim.simx_return_ok:
-    #     print('Could not get handle to Robot')
+    res, floor = sim.simxGetObjectHandle(
+        clientID, 'ResizableFloor_5_25', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get hanlde of floor')
 
     res, drone_base_hanlde = sim.simxGetObjectHandle(
         clientID, 'Quadricopter_base', sim.simx_opmode_oneshot_wait)
@@ -75,144 +74,120 @@ if clientID != -1:
     res, resolution, image = sim.simxGetVisionSensorImage(
         clientID, camera, 0, sim.simx_opmode_streaming)
 
-    isMapReady = False
-
     while (sim.simxGetConnectionId(clientID) != -1):
-        # Get image from Camera
 
+        # sim.simxSetJointTargetVelocity(
+        #     clientID, leftMotor, 1.0, sim.simx_opmode_oneshot)
+        # sim.simxSetJointTargetVelocity(
+        #     clientID, rightMotor, 1.0, sim.simx_opmode_oneshot)
+        # # Get image from CameraAa
+        # res_pers, resolution, image_pers = sim.simxGetVisionSensorImage(
+        #     clientID, camera_pers, 0, sim.simx_opmode_buffer)
         res, resolution, image = sim.simxGetVisionSensorImage(
             clientID, camera, 0, sim.simx_opmode_buffer)
 
-        # get drone position
+        # # get drone position
+        # drone_base_position = sim.simxGetObjectPosition(
+        #     clientID, drone_base_hanlde, floor, sim.simx_opmode_blocking)
+        # drone_target_position = sim.simxGetObjectPosition(
+        #     clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        # print(drone_base_position)
 
-        drone_base_position = sim.simxGetObjectPosition(
-            clientID, drone_base_hanlde, floor, sim.simx_opmode_blocking)
-        drone_target_position = sim.simxGetObjectPosition(
-            clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
-        print(drone_base_position)
+        # # Drone move in z axis
+        # if(drone_base_position[1][2] <= 8 and repeatseed == 0):
+        #     repeatseed = 1
+        #     for i in range(int(drone_base_position[1][2]+1), 9):
+        #         drone_base_position = sim.simxGetObjectPosition(
+        #             clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        #         sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
+        #                                   drone_base_position[1][0], drone_base_position[1][1], i], sim.simx_opmode_blocking)
+        #         print(drone_base_position)
+        #         time.sleep(2)
+        # # Drone move in x axis
+        # if(drone_base_position[1][0] != 0 and repeatseed == 1):
+        #     repeatseed = 2
+        #     drone_x_sign = drone_base_position[1][0] / \
+        #         abs(drone_base_position[1][0])
+        #     for i in range(1, ((int(abs(drone_base_position[1][0])))*10)+1):
+        #         drone_base_position = sim.simxGetObjectPosition(
+        #             clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        #         sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [drone_base_position[1][0] - drone_x_sign*0.1
+        #         sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
+        #                                   drone_base_position[1][0] - drone_x_sign*0.05, drone_base_position[1][1], drone_base_position[1][2]], sim.simx_opmode_blocking)
+        #         print(drone_base_position)
+        #         time.sleep(0.1)
+        #     time.sleep(6)
+        #     drone_base_position=sim.simxGetObjectPosition(
+        #         clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        #     print(drone_base_position)
 
-        # Drone move in z axis
-        if(drone_base_position[1][2] <= 8 and repeatseed == 0):
-            repeatseed = 1
-            for i in range(int(drone_base_position[1][2]+1), 9):
-                drone_base_position = sim.simxGetObjectPosition(
-                    clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
-                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
-                    drone_base_position[1][0], drone_base_position[1][1], i], sim.simx_opmode_blocking)
-                print(drone_base_position)
-                time.sleep(3)
+        # if(drone_base_position[1][0] != 0 and repeatseed == 2):
+        #     repeatseed=3
+        #     drone_y_sign=drone_base_position[1][1] /
+        #         abs(drone_base_position[1][1])
+        #     for i in range(1, ((int(abs(drone_base_position[1][1])))*20)+1):
+        #         drone_base_position=sim.simxGetObjectPosition(
+        #             clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        #         sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
+        #                                   drone_base_position[1][0], drone_base_position[1][1] - drone_y_sign*0.05, drone_base_position[1][2]], sim.simx_opmode_blocking)
+        #         print(drone_base_position)
+        #         time.sleep(0.1)
+        #     time.sleep(6)
+        #     drone_base_position=sim.simxGetObjectPosition(
+        #         clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
+        #     print(drone_base_position)
+        #     print(drone_target_position)
+        # image process
+        if res == sim.simx_return_ok:
+            original = np.array(image, dtype=np.uint8)
+            original.resize([resolution[0], resolution[1], 3])
+            original = cv2.flip(original, 0)
+            original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
+            # cv2.imshow("Camera", original)
 
-        # Drone move in x axis
-        if(drone_base_position[1][0] != 0 and repeatseed == 1):
-            repeatseed = 2
-            drone_x_sign = drone_base_position[1][0] / \
-                abs(drone_base_position[1][0])
-            for i in range(1, ((int(abs(drone_base_position[1][0])))*10)+1):
-                drone_base_position = sim.simxGetObjectPosition(
-                    clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
-                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
-                    drone_base_position[1][0] - drone_x_sign*0.1, drone_base_position[1][1], drone_base_position[1][2]], sim.simx_opmode_blocking)
-                print(drone_base_position)
-                time.sleep(0.1)
-            time.sleep(4)
-            drone_base_position = sim.simxGetObjectPosition(
-                clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
-            print(drone_base_position)
+            robot_mask, tree_mask, white_obstacle_mask = main_fun.findColorsMasks(
+                original)
 
-        if(drone_base_position[1][0] != 0 and repeatseed == 2):
-            repeatseed = 3
-            drone_y_sign = drone_base_position[1][1] / \
-                abs(drone_base_position[1][1])
-            for i in range(1, ((int(abs(drone_base_position[1][1])))*10)+1):
-                drone_base_position = sim.simxGetObjectPosition(
-                    clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
-                sim.simxSetObjectPosition(clientID, drone_target_hanlde, floor, [
-                    drone_base_position[1][0], drone_base_position[1][1] - drone_y_sign*0.1, drone_base_position[1][2]], sim.simx_opmode_blocking)
-                print(drone_base_position)
-                time.sleep(0.1)
-            time.sleep(4)
-            drone_base_position = sim.simxGetObjectPosition(
-                clientID, drone_target_hanlde, floor, sim.simx_opmode_blocking)
-            print(drone_base_position)
+            obstacles_image = cv2.bitwise_or(tree_mask, white_obstacle_mask)
+            # cv2.imshow("ANNOYING1", obstacles_image)
+            # cv2.waitKey(0)
 
-        # commands = []
+            thick_mask = main_fun.createFatMap(white_obstacle_mask, 18)
+            thick_tree = main_fun.createFatMap(tree_mask, 10)
+            map_matrix = cv2.bitwise_or(thick_tree, thick_mask)
 
-        # State Machine
-        # main_fun.currentState('GETTING_MAP', res, resolution, image)
+            # Find START and END coordinates
+            start_x, start_y = main_fun.detectCenterOfMass(robot_mask)
+            cv2.imshow("ROBOT", robot_mask)
+            cv2.waitKey(0)
+            manta_mask = main_fun.findMantaMask(original)
+            end_x, temp_y = main_fun.detectCenterOfMass(manta_mask)
+            end_y = temp_y
 
-        res, resolution, image = sim.simxGetVisionSensorImage(
-            clientID, camera, 0, sim.simx_opmode_buffer)
+            # aStar_path = main_fun.aStar(map_matrix, start_y, start_x, end_y, end_x)
+            cost_matrix = np.ones((IMG_HEIGHT, IMG_WIDTH), dtype=np.int8)
 
-        if not isMapReady:
-            if res == sim.simx_return_ok:
-                time.sleep(50)
-                original = np.array(image, dtype=np.uint8)
-                original.resize([resolution[0], resolution[1], 3])
-                original = cv2.flip(original, 0)
-                original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
-                # cv2.imshow("Camera", original)
+            for i in range(len(map_matrix)):
+                for j in range(len(map_matrix[0])):
+                    if map_matrix[i][j] == 255:
+                        cost_matrix[i][j] = 0
 
-                # Find masks for hospital, car and obstacles
-                robot_mask, manta_mask, tree_mask, white_obstacle_mask = fun.findColorsMasks(
-                    original)
+            print("Finding AStar path...")
 
-                # Find START and END coordinates
-                start_x, start_y = fun.detectCenterOfMass(robot_mask, False)
-                print("Ground robot centre: (", start_x, ", ", start_y, ")")
-                end_x, end_y = fun.detectCenterOfMass(manta_mask, False)
-                print("Red manta's centre: (", end_x, ", ", end_y, ")")
+            aStar_graph = tcod.path.AStar(cost_matrix, 1.0)
+            print("POINTS: ", start_y, start_x, end_y, end_x)
 
-                # Finding a path fron START to END
-                obstacles_image = cv2.bitwise_or(
-                    tree_mask, white_obstacle_mask)
-                thick_mask = fun.createFatMap(white_obstacle_mask)
-                map_matrix = cv2.bitwise_or(tree_mask, thick_mask)
-                # cv2.imshow("FatImage", map_matrix)
+            path_list = aStar_graph.get_path(start_y, start_x, end_y, end_x)
+            # print("Length commands: ", len(path_list))
+            # aStar_path = fun.pathFinder(map_matrix, start_y, start_x, end_y, end_x)
 
-                # Path Finding algorithms
-                # pf_path = fun.pathFinder(
-                #     map_matrix, start_y, start_x, end_y, end_x)
+            path_image = main_fun.pathToImage(obstacles_image, path_list)
+            cv2.imshow("Path_image", path_image)
+            commands = main_fun.getCommands(path_list)
 
-                aStar_path = fun.aStar(
-                    map_matrix, start_y, start_x, end_y, end_x)
-
-                path_image = fun.pathToImage(obstacles_image, aStar_path)
-                cv2.imshow("A Star", path_image)
-
-                commands, isMapReady = fun.getCommands(aStar_path)
-                print(commands)
-
-                # Save map and path images
-                # map_matrix.dtype = 'uint8'
-                # path_image.dtype = 'uint8'
-                # status_map = cv2.imwrite(
-                #     'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Map_maze.jpg', map_matrix)
-                # status_path = cv2.imwrite(
-                #     'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Path_maze.jpg', path_image)
-                # print("Map image saved status: ", status_map)
-                # print("Path image saved status: ", status_path)
-
-                # ------------------------------------- TESTING -------------------------------------
-
-                # When we CANNOT IDENTIFY the red Manta
-
-                # corners_image = fun.detectCorners(white_obstacle_mask)
-                # cv2.imshow("Corners", corners_image)
-
-                # contours_image = fun.detectContours(white_obstacle_mask)
-                # im_with_keypoints = detectBlobs(obstacle_mask)
-                # Show keypoints
-                # cv2.imshow("Contours", contours_image)
-                # cv2.waitKey(0)
-
-                # ------------------------------------- TESTING -------------------------------------
-
-            elif res == sim.simx_return_novalue_flag:
-                # Camera has not started or is not returning images
-                print("Wait, there's no image yet")
-            else:
-                # Something else has happened
-                print("Unexpected error returned", res)
+        elif res == sim.simx_return_novalue_flag:
+            # Camera has not started or is not returning images
+            print("Wait, there's no image yet")
         else:
             print("Path is ready!!!")
 
@@ -220,8 +195,11 @@ if clientID != -1:
         if keypress == ord('q'):
             break
 
-    else:
-        print('Could not connect to remote API server')
+        # drone move to center
+
+
+else:
+    print('Could not connect to remote API server')
 
 # Close all simulation elements
 sim.simxFinish(clientID)

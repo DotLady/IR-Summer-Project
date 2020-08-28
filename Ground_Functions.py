@@ -6,7 +6,7 @@ import numpy as np
 
 
 SPEED = 5.0
-K_GAIN = 1.2
+K_GAIN = 5.0
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
 
@@ -51,6 +51,54 @@ def groundMovement(state, clientID, leftMotor, rightMotor, delta):
             clientID, leftMotor, SPEED, sim.simx_opmode_oneshot)
         sim.simxSetJointTargetVelocity(
             clientID, rightMotor, -SPEED, sim.simx_opmode_oneshot)
+
+
+def detectCenterOfMass(given_image, blurImage):
+    if blurImage:
+        given_image = cv2.medianBlur(given_image, 21)
+
+    color_image = cv2.cvtColor(given_image, cv2.COLOR_GRAY2BGR)
+
+    # temp_image = regionOfInterest(given_image, [0.05, 0.05, 0.95, 0.95])
+
+    ret, thresh = cv2.threshold(given_image, 0, 255, 0)
+    contours, hierarchy = cv2.findContours(
+        thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+    cX = IMG_WIDTH/2
+    cY = IMG_HEIGHT/2
+
+    for c in contours:
+        # compute the center of the contour
+        M = cv2.moments(c)
+        if (M["m10"] and M["m01"] and M["m00"]) != 0:
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            # draw the contour and center of the shape on the image
+            cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
+            cv2.circle(color_image, (cX, cY), 5, (0, 255, 0), -1)
+
+    # cv2.imshow("Center of mass", color_image)
+
+    return color_image, cX, cY
+
+
+def groundMovement(state, clientID, leftMotor, rightMotor, speed, delta):
+    if state == 'FORWARD':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, speed + delta, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, speed - delta, sim.simx_opmode_oneshot)
+    elif state == 'TURN_LEFT':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, -speed, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, speed, sim.simx_opmode_oneshot)
+    elif state == 'TURN_RIGHT':
+        sim.simxSetJointTargetVelocity(
+            clientID, leftMotor, speed, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, rightMotor, -speed, sim.simx_opmode_oneshot)
     elif state == 'STOP':
         sim.simxSetJointTargetVelocity(
             clientID, leftMotor, 0.0, sim.simx_opmode_oneshot)
@@ -73,29 +121,33 @@ def controllerMove(central_X):
 
     return delta
 
+
 def changeangletoeurrle(angle):
     return angle*180 / np.pi
 
-def checkangle(angle1,angle2):
-    if angle2-1<angle1 <angle2+1:
+
+def checkangle(angle1, angle2):
+    if angle2-1 < angle1 < angle2+1:
         return True
     else:
         return False
-    
-def checkposition(x1,y1,x2,y2):
-    xposition =0
-    yposition =0
-    if x2-0.5<x1<x2+0.5:
-        xposition =1
-    if y2-0.5<y1<y2+0.5:
-        yposition =1
-    return [xposition,yposition]
+
+
+def checkposition(x1, y1, x2, y2):
+    xposition = 0
+    yposition = 0
+    if x2-0.5 < x1 < x2+0.5:
+        xposition = 1
+    if y2-0.5 < y1 < y2+0.5:
+        yposition = 1
+    return [xposition, yposition]
+
 
 def deltaspeed(delta):
-    if delta>=10.0:
-        delta =10.0
+    if delta >= 10.0:
+        delta = 10.0
         return delta
-    if delta<=-10.0:
+    if delta <= -10.0:
         delta = -10.0
         return delta
     else:
