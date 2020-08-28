@@ -102,7 +102,6 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
             if isMapReady:
                 print("\nPath is ready!")
-                print(commands)
                 manta_coordinates = [commands[-1]]
                 isMovingToManta = True
 
@@ -116,26 +115,8 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
             # If get a path list
             if (len(commands) >= 1):
-                # Check if the angle of ground robot is same as the list, if true check position else robot rotating
-                if (fun.checkAngle(gnd_robot_angle, commands[0][2]) == True):
-                    # Function to check position, [x,y] x y are bool values, 1 means two positions are same, 0 means different
-                    # will return [1,1] when arrive the position.
-                    if (fun.checkPosition(gnd_robot_position[1][0], gnd_robot_position[1][1], commands[0][0], commands[0][1]) == [1, 1]):
-                        fun.groundMovement(
-                            'STOP', clientID_gnd, left_motor, right_motor, 0.0)
-                        commands = commands[1:]
-
-                    else:
-                        fun.groundMovement(
-                            'FORWARD', clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
-
-                else:
-                    error_angle = commands[0][2] - gnd_robot_angle
-                    rotate_speed = fun.deltaSpeed(error_angle*0.1)
-                    sim.simxSetJointTargetVelocity(
-                        clientID_gnd, left_motor, 1.0 - rotate_speed, sim.simx_opmode_oneshot)
-                    sim.simxSetJointTargetVelocity(
-                        clientID_gnd, right_motor, 1.0 + rotate_speed, sim.simx_opmode_oneshot)
+                commands = states.MOVING_TO_PATH(
+                    commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
 
             else:
                 isMovingToManta = False
@@ -241,6 +222,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
                 if isMapReady:
                     print("\nReturning path is ready!")
+                    print(returning_commands)
                     isReturningMapReady = True
                     isWaitingForMap = False
                     isGoingBackToHospital = True
@@ -253,28 +235,30 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
             # If get a path list
             if (len(returning_commands) >= 1):
-                # Check if the angle of ground robot is same as the list, if true check position else robot rotating
-                if (fun.checkAngle(gnd_robot_angle, returning_commands[0][2]) == True):
-                    # Function to check position, [x,y] x y are bool values, 1 means two positions are same, 0 means different
-                    # will return [1,1] when arrive the position.
-                    if (fun.checkPosition(gnd_robot_position[1][0], gnd_robot_position[1][1], returning_commands[0][0], returning_commands[0][1]) == [1, 1]):
-                        fun.groundMovement(
-                            'STOP', clientID_gnd, left_motor, right_motor, 0.0)
+                returning_commands = states.MOVING_TO_PATH(
+                    returning_commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, left_motor, right_motor, FORWARD_SPEED*0.6)
+                # # Check if the angle of ground robot is same as the list, if true check position else robot rotating
+                # if (fun.checkAngle(gnd_robot_angle, returning_commands[0][2]) == True):
+                #     # Function to check position, [x,y] x y are bool values, 1 means two positions are same, 0 means different
+                #     # will return [1,1] when arrive the position.
+                #     if (fun.checkPosition(gnd_robot_position[1][0], gnd_robot_position[1][1], returning_commands[0][0], returning_commands[0][1]) == [1, 1]):
+                #         fun.groundMovement(
+                #             'STOP', clientID_gnd, left_motor, right_motor, 0.0)
 
-                        returning_commands = returning_commands[1:]
+                #         returning_commands = returning_commands[1:]
 
-                    else:
-                        fun.groundMovement(
-                            'FORWARD', clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
+                #     else:
+                #         fun.groundMovement(
+                #             'FORWARD', clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
 
-                else:
-                    error_angle = returning_commands[0][2] - gnd_robot_angle
-                    rotate_speed = fun.deltaSpeed(error_angle*0.1)
+                # else:
+                #     error_angle = returning_commands[0][2] - gnd_robot_angle
+                #     rotate_speed = fun.deltaSpeed(error_angle*0.1)
 
-                    sim.simxSetJointTargetVelocity(
-                        clientID_gnd, left_motor, 1.0 - rotate_speed, sim.simx_opmode_oneshot)
-                    sim.simxSetJointTargetVelocity(
-                        clientID_gnd, right_motor, 1.0 + rotate_speed, sim.simx_opmode_oneshot)
+                #     sim.simxSetJointTargetVelocity(
+                #         clientID_gnd, left_motor, 1.0 - rotate_speed, sim.simx_opmode_oneshot)
+                #     sim.simxSetJointTargetVelocity(
+                #         clientID_gnd, right_motor, 1.0 + rotate_speed, sim.simx_opmode_oneshot)
             else:
                 isGoingBackToHospital = False
                 print("Mr York is safe now!!")

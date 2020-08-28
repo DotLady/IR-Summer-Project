@@ -458,9 +458,9 @@ def checkAngle(current_angle, desired_angle):
 def checkPosition(current_y, current_x, desired_y, desired_x):
     xposition = 0
     yposition = 0
-    if (abs(current_x - desired_x) < 0.3):
+    if (abs(current_x - desired_x) < 0.2):
         xposition = 1
-    if (abs(current_y - desired_y) < 0.3):
+    if (abs(current_y - desired_y) < 0.2):
         yposition = 1
     return [xposition, yposition]
 

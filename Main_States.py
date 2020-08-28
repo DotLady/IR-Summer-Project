@@ -11,7 +11,7 @@ IMG_HEIGHT = 512
 ONE_UNIT_DISTANCE = 6.283185307179586
 FORWARD_SPEED = 12.0
 TURNING_SPEED = 5.0
-APPROACHING_BEAR_SPEED = 4.0
+APPROACHING_BEAR_SPEED = 3.0
 PIXELS_PER_METER = 25.6
 THICK_NUMBER = 16
 
@@ -62,7 +62,32 @@ def GETTING_MAP(original, text):
         return [], False
 
 
-# def MOVING_TO_PATH(commands, clientID_gnd, left_motor, right_motor):
+def MOVING_TO_PATH(commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, left_motor, right_motor, speed):
+    if (fun.checkAngle(gnd_robot_angle, commands[0][2]) == True):
+        # Function to check position, [x,y] x y are bool values, 1 means two positions are same, 0 means different
+        # will return [1,1] when arrive the position.
+        if (fun.checkPosition(gnd_robot_position[1][0], gnd_robot_position[1][1], commands[0][0], commands[0][1]) == [1, 1]):
+            fun.groundMovement(
+                'STOP', clientID_gnd, left_motor, right_motor, 0.0)
+            commands = commands[1:]
+        else:
+            fun.groundMovement(
+                'FORWARD', clientID_gnd, left_motor, right_motor, speed)
+
+    else:
+        error_angle = commands[0][2] - gnd_robot_angle
+        if error_angle > 180.0:
+            error_angle = -180.0
+        elif error_angle < -180.0:
+            error_angle = 180.0
+        delta = error_angle * 0.1
+
+        sim.simxSetJointTargetVelocity(
+            clientID_gnd, left_motor, 1.0 - delta, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID_gnd, right_motor, 1.0 + delta, sim.simx_opmode_oneshot)
+
+    return commands
 
 
 def SEARCHING_BEAR(color_values, tshirt_x, clientID, left_motor, right_motor, prox_sensor):
