@@ -1,7 +1,6 @@
 import sim
 import cv2
 import numpy as np
-import matplotlib as mpl
 import tcod
 import time
 
@@ -9,10 +8,7 @@ SPEED = 4.0
 K_GAIN = 3.8
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
-ONE_UNIT_DISTANCE = 6.283185307179586
-FORWARD_SPEED = 3.0
 PIXELS_PER_METER = 25.6
-# GRND_BOT_SIZE = 1
 
 
 def handleDroneObjects(clientID):
@@ -96,7 +92,12 @@ def handleGroundObjects(clientID):
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
-    return camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, leftWheel, rightWheel, left_joint, right_joint
+    res, elevation_motor = sim.simxGetObjectHandle(
+        clientID, 'Elevation_motor', sim.simx_opmode_oneshot_wait)
+    if res != sim.simx_return_ok:
+        print('Could not get handle to Robot')
+
+    return camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, leftWheel, rightWheel, left_joint, right_joint, elevation_motor
 
 
 def droneInitialMovement(clientID, drone_base_handle, drone_target_handle, floor, drone_viewposition, repeatseed):
@@ -293,6 +294,7 @@ def getCommands(path):
     detailed_commands = []
     general_commands = []
     commands_meters = []
+    counter_180 = 0
 
     for i in range(len(path) - 1):
         command = [path[i+1][0], path[i+1][1]]
@@ -311,6 +313,7 @@ def getCommands(path):
             else:
                 # print("South")
                 command.append(-180)
+                counter_180 += 1
                 # command.append(180)
         elif path[i][0] > path[i+1][0]:
             if path[i][1] > path[i+1][1]:
@@ -330,8 +333,6 @@ def getCommands(path):
                 # command.append(225)
         detailed_commands.append(command)
 
-        # detailed_commands.append(command)
-
     for i in range(len(detailed_commands)-1):
         if (detailed_commands[i+1][2] != detailed_commands[i][2]):
             general_commands.append(detailed_commands[i])
@@ -339,8 +340,19 @@ def getCommands(path):
     # Add the END point to command list
     # general_commands.append(detailed_commands[-1])                                    !!!!!!!!!!!! UNCOMMENT
 
-    commands_meters = pixelsToMeters(general_commands)
-    # commands_meters = pixelsToMeters(detailed_commands)
+    if counter_180 > 0:
+        final_commands = np.copy(general_commands)
+
+        # Fix commands to avoid problems with -180 degrees
+        for i in range(len(general_commands)-1):
+            if (general_commands[i+1][2] == -180):
+                if (general_commands[i][2] > 0):
+                    final_commands[i+1][2] = 179.9
+                else:
+                    final_commands[i+1][2] = -179.9
+        commands_meters = pixelsToMeters(final_commands)
+    else:
+        commands_meters = pixelsToMeters(general_commands)
 
     return commands_meters
 
@@ -452,7 +464,7 @@ def changeRadiansToDegrees(angle):
 
 
 def checkAngle(current_angle, desired_angle):
-    return (abs(desired_angle-current_angle) < 1.0)
+    return (abs(desired_angle - current_angle) < 1.0)
 
 
 def checkPosition(current_y, current_x, desired_y, desired_x):
@@ -463,11 +475,3 @@ def checkPosition(current_y, current_x, desired_y, desired_x):
     if (abs(current_y - desired_y) < 0.2):
         yposition = 1
     return [xposition, yposition]
-
-
-def deltaSpeed(delta):
-    if delta > 6.0:
-        delta = -6.0
-    elif delta < -6.0:
-        delta = 6.0
-    return delta

@@ -8,17 +8,14 @@ import time
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
-ONE_UNIT_DISTANCE = 6.283185307179586
-FORWARD_SPEED = 12.0
+FORWARD_SPEED = 8.0
 TURNING_SPEED = 5.0
 
 drone_viewposition = [0, 0, 8]
 repeatseed = 0
-grid_matrix = np.zeros((512, 512))
-
-lastLeftWheelPosition = 0.0
-lastRightWheelPosition = 0.0
-leftWheelOdom = 0.0
+commands = []
+manta_coordinates = []
+returning_commands = []
 
 # -------------------------------------- START PROGRAM --------------------------------------
 # Start Program and just in case, close all opened connections
@@ -26,7 +23,6 @@ print('Program started')
 sim.simxFinish(-1)
 
 # Connect to simulator running on localhost
-# V-REP runs on port 19997, a script opens the API on port 19999
 clientID_drone = sim.simxStart('127.0.0.1', 19999, True, True, 5000, 5)
 clientID_gnd = sim.simxStart('127.0.0.1', 19998, True, True, 5000, 5)
 
@@ -39,7 +35,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
     camera_drone, drone_base_handle, drone_target_handle, floor = fun.handleDroneObjects(
         clientID_drone)
-    camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, leftWheel, rightWheel, left_joint, right_joint = fun.handleGroundObjects(
+    camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, leftWheel, rightWheel, left_joint, right_joint, elevation_motor = fun.handleGroundObjects(
         clientID_gnd)
 
     # Start main control loop
@@ -50,12 +46,9 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
     res_gnd, resolution_gnd, image_gnd = sim.simxGetVisionSensorImage(
         clientID_gnd, camera_gnd, 0, sim.simx_opmode_streaming)
 
-    leftWheelDiameter = sim.simxGetObjectFloatParameter(clientID_gnd, leftWheel, 18, sim.simx_opmode_oneshot)[1] - sim.simxGetObjectFloatParameter(clientID_gnd,
-                                                                                                                                                   leftWheel, 15, sim.simx_opmode_oneshot)[1]
-
+    # Flags that allow each of the steps to excecute only when necessary
     isDroneCentered = False
     isMapReady = False
-    isPreparedToGo = False
     isMovingToManta = False
     isLookingForBear = False
     isRescueDone = False
@@ -64,13 +57,6 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
     isReturningMapReady = False
     isWaitingForMap = False
     isGoingBackToHospital = False
-
-    delta = 0.0
-    commands = []
-
-    manta_coordinates = []
-    returning_commands = []
-    color_values = []
 
     while (sim.simxGetConnectionId(clientID_drone) != -1) and (sim.simxGetConnectionId(clientID_gnd) != -1):
 
@@ -83,25 +69,27 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
         # If we don't have a path
         if (not isMapReady) and isDroneCentered:
+            # Give time for the drone to stabilize
             time.sleep(40)
+            # Repeat until getting the instructions (commands) list
             while (len(commands) == 0):
                 res_drone, resolution_drone, image_drone = sim.simxGetVisionSensorImage(
                     clientID_drone, camera_drone, 0, sim.simx_opmode_buffer)
 
                 if res_drone == sim.simx_return_ok:
-                    # time.sleep(40)
                     original = np.array(image_drone, dtype=np.uint8)
                     original.resize(
                         [resolution_drone[0], resolution_drone[1], 3])
                     original = cv2.flip(original, 0)
                     original = cv2.cvtColor(original, cv2.COLOR_RGB2BGR)
 
-                    # Image processing with the drone's camera. Getting a path with A* algorithm
+                    # Image processing with the drone's camera.
                     commands, isMapReady = states.GETTING_MAP(
                         original, 'MAP_TO_RESCUE')
 
             if isMapReady:
                 print("\nPath is ready!")
+                # Save the last position for the robot to come back later when rescuing Mr York. This position will be used as the new start point when returning back to the hospital.
                 manta_coordinates = [commands[-1]]
                 isMovingToManta = True
 
@@ -113,7 +101,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
             gnd_robot_angle = fun.changeRadiansToDegrees(sim.simxGetObjectOrientation(
                 clientID_gnd, body_gnd, floor, sim.simx_opmode_blocking)[1][2])
 
-            # If get a path list
+            # If a path list exists (the visited nodes are eliminates from the list)
             if (len(commands) >= 1):
                 commands = states.MOVING_TO_PATH(
                     commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
@@ -125,7 +113,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
         # -------------------------------------- GROUND ROBOT SEARCHES FOR MR YORK --------------------------------------
 
         if isLookingForBear and (not isMovingToManta):
-            # Prepare ground robot arms for rescuing Mr. York
+            # Prepare ground robot arms for rescuing Mr. York (open / close)
             isReadyToSearch, armsClosed = fun.armsMovement(
                 clientID_gnd, left_joint, right_joint, isRescueDone)
 
@@ -143,20 +131,27 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
                 # Find mask for Mr York's tshirt
                 tshirt_mask = fun.findBearMask(original)
 
-                values = list(tshirt_mask)
-                color_values = np.unique(values)
-
                 # Finding centre of mass of Mr York's tshirt
                 tshirt_x, tshirt_y = fun.detectCenterOfMass(tshirt_mask)
 
                 # Look up for Mr York and move towards him
                 isRescueDone, isReadyToSearch = states.SEARCHING_BEAR(
-                    color_values, tshirt_x, clientID_gnd, left_motor, right_motor, prox_sensor)
+                    tshirt_x, clientID_gnd, left_motor, right_motor, prox_sensor)
 
             if armsClosed:
-                isGoingBackToManta = True
-                isLookingForBear = False
-                print("Let's go back...")
+                res, elevation_motor_position = sim.simxGetJointPosition(
+                    clientID_gnd, elevation_motor, sim.simx_opmode_oneshot)
+
+                if (res == sim.simx_return_ok):
+                    if (elevation_motor_position < 0.04):
+                        sim.simxSetJointTargetVelocity(
+                            clientID_gnd, elevation_motor, 0.02, sim.simx_opmode_oneshot)
+                    else:
+                        sim.simxSetJointTargetVelocity(
+                            clientID_gnd, elevation_motor, 0.0, sim.simx_opmode_oneshot)
+                        isGoingBackToManta = True
+                        isLookingForBear = False
+                        print("Let's go back...")
 
         if isGoingBackToManta and armsClosed:
 
@@ -175,7 +170,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
             error_angle = gnd_robot_angle - desired_angle
 
             # Check for the correct orientation of the ground robot
-            while(abs(error_angle) > 10.0):
+            while(abs(error_angle) > 8.0):
                 if error_angle < 0.0:
                     fun.groundMovement(
                         'TURN_LEFT', clientID_gnd, left_motor, right_motor, TURNING_SPEED)
@@ -193,7 +188,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
             position_x_diff = abs(current_x - desired_x)
             while (position_x_diff > 0.2):
                 fun.groundMovement(
-                    'FORWARD', clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
+                    'FORWARD', clientID_gnd, left_motor, right_motor, FORWARD_SPEED*0.5)
                 current_x = sim.simxGetObjectPosition(
                     clientID_gnd, body_gnd, floor, sim.simx_opmode_oneshot)[1][1]
                 position_x_diff = abs(current_x - desired_x)
@@ -236,29 +231,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
             # If get a path list
             if (len(returning_commands) >= 1):
                 returning_commands = states.MOVING_TO_PATH(
-                    returning_commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, left_motor, right_motor, FORWARD_SPEED*0.6)
-                # # Check if the angle of ground robot is same as the list, if true check position else robot rotating
-                # if (fun.checkAngle(gnd_robot_angle, returning_commands[0][2]) == True):
-                #     # Function to check position, [x,y] x y are bool values, 1 means two positions are same, 0 means different
-                #     # will return [1,1] when arrive the position.
-                #     if (fun.checkPosition(gnd_robot_position[1][0], gnd_robot_position[1][1], returning_commands[0][0], returning_commands[0][1]) == [1, 1]):
-                #         fun.groundMovement(
-                #             'STOP', clientID_gnd, left_motor, right_motor, 0.0)
-
-                #         returning_commands = returning_commands[1:]
-
-                #     else:
-                #         fun.groundMovement(
-                #             'FORWARD', clientID_gnd, left_motor, right_motor, FORWARD_SPEED)
-
-                # else:
-                #     error_angle = returning_commands[0][2] - gnd_robot_angle
-                #     rotate_speed = fun.deltaSpeed(error_angle*0.1)
-
-                #     sim.simxSetJointTargetVelocity(
-                #         clientID_gnd, left_motor, 1.0 - rotate_speed, sim.simx_opmode_oneshot)
-                #     sim.simxSetJointTargetVelocity(
-                #         clientID_gnd, right_motor, 1.0 + rotate_speed, sim.simx_opmode_oneshot)
+                    returning_commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, left_motor, right_motor, FORWARD_SPEED*0.5)
             else:
                 isGoingBackToHospital = False
                 print("Mr York is safe now!!")
