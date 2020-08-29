@@ -232,8 +232,6 @@ def detectCenterOfMass(given_image):
             cv2.drawContours(color_image, [c], -1, (0, 255, 0), 2)
             cv2.circle(color_image, (cX, cY), 5, (0, 255, 0), -1)
 
-    # cv2.imshow("Center of mass", color_image)
-
     return cX, cY
 
 
@@ -297,40 +295,41 @@ def getCommands(path):
     counter_180 = 0
 
     for i in range(len(path) - 1):
-        command = [path[i+1][0], path[i+1][1]]
-        if path[i][0] == path[i+1][0]:
-            if path[i][1] > path[i+1][1]:
-                # print("Left")
-                command.append(90)
+        current_y = path[i][0]
+        current_x = path[i][1]
+        desired_y = path[i+1][0]
+        desired_x = path[i+1][1]
+
+        command = [desired_y, desired_x]
+        if current_y == desired_y:
+            if current_x > desired_x:
+                # Left
+                command.append(90.0)
             else:
-                # print("Right")
-                command.append(-90)
-                # command.append(270)
-        elif path[i][1] == path[i+1][1]:
-            if path[i][0] > path[i+1][0]:
-                # print("North")
-                command.append(0)
+                # Right
+                command.append(-90.0)
+        elif current_x == desired_x:
+            if current_y > desired_y:
+                # Up
+                command.append(0.0)
             else:
-                # print("South")
-                command.append(-180)
+                # Down
+                command.append(-180.0)
                 counter_180 += 1
-                # command.append(180)
-        elif path[i][0] > path[i+1][0]:
-            if path[i][1] > path[i+1][1]:
-                # print("Upper left")
-                command.append(45)
-            elif path[i][1] < path[i+1][1]:
-                # print("Upper right")
-                command.append(-45)
-                # command.append(315)
-        elif path[i][0] < path[i+1][0]:
-            if path[i][1] > path[i+1][1]:
-                # print("Lower left")
-                command.append(135)
-            elif path[i][1] < path[i+1][1]:
-                # print("Lower right")
-                command.append(-135)
-                # command.append(225)
+        elif current_y > desired_y:
+            if current_x > desired_x:
+                # Diagonal upper left
+                command.append(45.0)
+            elif current_x < desired_x:
+                # Diagonal upper right
+                command.append(-45.0)
+        elif current_y < desired_y:
+            if current_x > desired_x:
+                # Diagonal lower left
+                command.append(135.0)
+            elif current_x < desired_x:
+                # Diagonal lower right
+                command.append(-135.0)
         detailed_commands.append(command)
 
     for i in range(len(detailed_commands)-1):
@@ -345,7 +344,7 @@ def getCommands(path):
 
         # Fix commands to avoid problems with -180 degrees
         for i in range(len(general_commands)-1):
-            if (general_commands[i+1][2] == -180):
+            if (general_commands[i+1][2] == -180.0):
                 if (general_commands[i][2] > 0):
                     final_commands[i+1][2] = 179.9
                 else:
@@ -353,6 +352,8 @@ def getCommands(path):
         commands_meters = pixelsToMeters(final_commands)
     else:
         commands_meters = pixelsToMeters(general_commands)
+
+    print(commands_meters)
 
     return commands_meters
 
@@ -470,8 +471,8 @@ def checkAngle(current_angle, desired_angle):
 def checkPosition(current_y, current_x, desired_y, desired_x):
     xposition = 0
     yposition = 0
-    if (abs(current_x - desired_x) < 0.2):
+    if (abs(current_x - desired_x) < 0.35):
         xposition = 1
-    if (abs(current_y - desired_y) < 0.2):
+    if (abs(current_y - desired_y) < 0.35):
         yposition = 1
     return [xposition, yposition]

@@ -11,7 +11,7 @@ IMG_HEIGHT = 512
 ONE_UNIT_DISTANCE = 6.283185307179586
 TURNING_SPEED = 5.0
 APPROACHING_BEAR_SPEED = 3.0
-THICK_NUMBER = 17
+THICK_NUMBER = 18
 
 
 def GETTING_MAP(original, text):
@@ -31,6 +31,7 @@ def GETTING_MAP(original, text):
     thick_mask = fun.createFatMap(white_obstacle_mask, THICK_NUMBER)
     thick_tree = fun.createFatMap(tree_mask, int(THICK_NUMBER/2.0))
     map_matrix = cv2.bitwise_or(thick_tree, thick_mask)
+    cv2.imshow("FAT MAZE", thick_mask)
 
     # Find START and END coordinates
     start_x, start_y = fun.detectCenterOfMass(robot_mask)
@@ -39,7 +40,7 @@ def GETTING_MAP(original, text):
     if (text == 'MAP_TO_RESCUE'):
         temp_x, temp_y = fun.detectCenterOfMass(manta_mask)
         end_x = temp_x  # - 15
-        end_y = temp_y + (THICK_NUMBER + 3)
+        end_y = temp_y + (THICK_NUMBER + 2)
         # print("Red manta's centre: (", end_x, ", ", end_y, ")")
     else:
         hospital_mask = fun.findHospitalMask(original)

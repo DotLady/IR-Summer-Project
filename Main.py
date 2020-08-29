@@ -217,7 +217,7 @@ if (clientID_drone != -1) and (clientID_gnd != -1):
 
                 if isMapReady:
                     print("\nReturning path is ready!")
-                    print(returning_commands)
+                    # print(returning_commands)
                     isReturningMapReady = True
                     isWaitingForMap = False
                     isGoingBackToHospital = True
