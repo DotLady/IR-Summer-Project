@@ -8,53 +8,53 @@ import time
 
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
-ONE_UNIT_DISTANCE = 6.283185307179586
-TURNING_SPEED = 5.0
-APPROACHING_BEAR_SPEED = 3.0
+TURNING_SPEED = 3.0
+APPROACHING_BEAR_SPEED = 2.0
 THICK_NUMBER = 18
 
 
 def GETTING_MAP(original, text):
-    # cv2.imshow("Drone camera", original)
     print("Creating map...")
 
     aStar_path = []
     commands = []
 
-    # Find masks for hospital, car and obstacles
+    # Find masks for ground robot and obstacles
     robot_mask, tree_mask, white_obstacle_mask = fun.findColorsMasks(
         original)
+    # Find mask for red manta
     manta_mask = fun.findMantaMask(original)
 
+    # Combine into one image all the obstacles (walls, ceilings and trees)
     obstacles_image = cv2.bitwise_or(tree_mask, white_obstacle_mask)
 
+    # Make the obstacles thicker to take into account the size of the ground robot.
     thick_mask = fun.createFatMap(white_obstacle_mask, THICK_NUMBER)
     thick_tree = fun.createFatMap(tree_mask, int(THICK_NUMBER/2.0))
     map_matrix = cv2.bitwise_or(thick_tree, thick_mask)
     cv2.imshow("FAT MAZE", thick_mask)
 
-    # Find START and END coordinates
+    # Find START coordinates
     start_x, start_y = fun.detectCenterOfMass(robot_mask)
-    # print("Ground robot centre: (", start_x, ", ", start_y, ")")
 
+    # Find END coordinates
     if (text == 'MAP_TO_RESCUE'):
         temp_x, temp_y = fun.detectCenterOfMass(manta_mask)
-        end_x = temp_x  # - 15
+        end_x = temp_x
         end_y = temp_y + (THICK_NUMBER + 2)
-        # print("Red manta's centre: (", end_x, ", ", end_y, ")")
     else:
         hospital_mask = fun.findHospitalMask(original)
         end_x, end_y = fun.detectCenterOfMass(hospital_mask)
-        # print("Hospital's centre: (", end_x, ", ", end_y, ")")
-        thick_manta = fun.createFatMap(manta_mask, 1)
+        # For returning, the masta is also considered an obstacle
+        thick_manta = fun.createFatMap(manta_mask, 2)
         map_matrix = cv2.bitwise_or(map_matrix, thick_manta)
 
     # Path Finding algorithm
     aStar_path = fun.aStar(map_matrix, start_y, start_x, end_y, end_x)
-    # aStar_path = fun.pathFinder(map_matrix, start_y, start_x, end_y, end_x)
 
+    # Check if a path exists.
     if (len(aStar_path) != 0):
-        path_image = fun.pathToImage(obstacles_image, aStar_path)
+        fun.pathToImage(obstacles_image, aStar_path)
         commands = fun.getCommands(aStar_path)
         return commands, True
     else:
@@ -75,6 +75,7 @@ def MOVING_TO_PATH(commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, 
 
     else:
         error_angle = commands[0][2] - gnd_robot_angle
+        # Get the delta for turning towards the desired orientation avoiding turns bigger that 180 degrees
         if error_angle > 180.0:
             error_angle = -180.0
         elif error_angle < -180.0:
@@ -89,20 +90,25 @@ def MOVING_TO_PATH(commands, gnd_robot_position, gnd_robot_angle, clientID_gnd, 
     return commands
 
 
-def SEARCHING_BEAR(tshirt_x, clientID, left_motor, right_motor, prox_sensor):
+def SEARCHING_BEAR(tshirt_x, unique_values, clientID, left_motor, right_motor, prox_sensor):
     # Function returns isRescueDone, isReadyToSearch
     # Calculated offset
     delta = fun.controllerMove(tshirt_x)
 
-    sim.simxSetJointTargetVelocity(
-        clientID, left_motor, APPROACHING_BEAR_SPEED + delta, sim.simx_opmode_oneshot)
-    sim.simxSetJointTargetVelocity(
-        clientID, right_motor, APPROACHING_BEAR_SPEED - delta, sim.simx_opmode_oneshot)
-    isDetecting = sim.simxReadProximitySensor(
-        clientID, prox_sensor, sim.simx_opmode_oneshot)[1]
-    if isDetecting:
+    if (len(unique_values) == 1) and (unique_values[0] == 0):
         fun.groundMovement(
-            'STOP', clientID, left_motor, right_motor, 0.0)
-        return True, False
+            'TURN_RIGHT', clientID, left_motor, right_motor, TURNING_SPEED)
+
     else:
-        return False, True
+        sim.simxSetJointTargetVelocity(
+            clientID, left_motor, APPROACHING_BEAR_SPEED + delta, sim.simx_opmode_oneshot)
+        sim.simxSetJointTargetVelocity(
+            clientID, right_motor, APPROACHING_BEAR_SPEED - delta, sim.simx_opmode_oneshot)
+        isDetecting = sim.simxReadProximitySensor(
+            clientID, prox_sensor, sim.simx_opmode_oneshot)[1]
+        if isDetecting:
+            fun.groundMovement(
+                'STOP', clientID, left_motor, right_motor, 0.0)
+            return True, False
+
+    return False, True

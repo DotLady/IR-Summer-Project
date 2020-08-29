@@ -104,7 +104,6 @@ if clientID != -1:
         clientID, camera, 0, sim.simx_opmode_streaming)
 
     while (sim.simxGetConnectionId(clientID) != -1):
-        # Get image from Camera
         res, elevation_motor_position = sim.simxGetJointPosition(
             clientID, elevation_motor, sim.simx_opmode_oneshot)
 
@@ -112,9 +111,9 @@ if clientID != -1:
             if (elevation_motor_position < 0.05):
                 sim.simxSetJointTargetVelocity(
                     clientID, elevation_motor, 0.1, sim.simx_opmode_oneshot)
-            else:
+            elif (elevation_motor_position > 0.0):
                 sim.simxSetJointTargetVelocity(
-                    clientID, elevation_motor, 0.0, sim.simx_opmode_oneshot)
+                    clientID, elevation_motor, -0.1, sim.simx_opmode_oneshot)
         # else:
         #     if (res == sim.simx_return_ok):
         #         sim.simxSetJointTargetVelocity(

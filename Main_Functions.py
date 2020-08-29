@@ -4,7 +4,6 @@ import numpy as np
 import tcod
 import time
 
-SPEED = 4.0
 K_GAIN = 3.8
 IMG_WIDTH = 512
 IMG_HEIGHT = 512
@@ -71,16 +70,6 @@ def handleGroundObjects(clientID):
     if res != sim.simx_return_ok:
         print('Could not get handle to rightMotor')
 
-    # Wheels
-    res, leftWheel = sim.simxGetObjectHandle(
-        clientID, 'Left_wheel', sim.simx_opmode_oneshot_wait)
-    if res != sim.simx_return_ok:
-        print('Could not get handle to leftWheel')
-    res, rightWheel = sim.simxGetObjectHandle(
-        clientID, 'Right_wheel', sim.simx_opmode_oneshot_wait)
-    if res != sim.simx_return_ok:
-        print('Could not get handle to rightWheel')
-
     # Ground robot arm joints
     res, left_joint = sim.simxGetObjectHandle(
         clientID, 'Left_joint', sim.simx_opmode_oneshot_wait)
@@ -97,7 +86,7 @@ def handleGroundObjects(clientID):
     if res != sim.simx_return_ok:
         print('Could not get handle to Robot')
 
-    return camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, leftWheel, rightWheel, left_joint, right_joint, elevation_motor
+    return camera_gnd, prox_sensor, body_gnd, left_motor, right_motor, left_joint, right_joint, elevation_motor
 
 
 def droneInitialMovement(clientID, drone_base_handle, drone_target_handle, floor, drone_viewposition, repeatseed):
@@ -118,7 +107,7 @@ def droneInitialMovement(clientID, drone_base_handle, drone_target_handle, floor
                 drone_base_position[1][0], drone_base_position[1][1], i], sim.simx_opmode_blocking)
             time.sleep(3)
 
-    # Drone move in x axis
+    # Drone move vertically
     if(drone_base_position[1][0] != 0 and repeatseed == 1):
         repeatseed = 2
         drone_x_sign = drone_base_position[1][0] / \
@@ -133,6 +122,7 @@ def droneInitialMovement(clientID, drone_base_handle, drone_target_handle, floor
         drone_base_position = sim.simxGetObjectPosition(
             clientID, drone_target_handle, floor, sim.simx_opmode_blocking)
 
+    # Drone move horizontally
     if(drone_base_position[1][0] != 0 and repeatseed == 2):
         repeatseed = 3
         drone_y_sign = drone_base_position[1][1] / \
@@ -212,7 +202,6 @@ def findHospitalMask(original):
 
 
 def detectCenterOfMass(given_image):
-
     color_image = cv2.cvtColor(given_image, cv2.COLOR_GRAY2BGR)
 
     ret, thresh = cv2.threshold(given_image, 0, 255, 0)
@@ -235,22 +224,24 @@ def detectCenterOfMass(given_image):
     return cX, cY
 
 
+# Function to make the obstacles thicker to take into account the size of the ground robot
 def createFatMap(grid_matrix, fat_number):
-    # print("Making walls thicker...")
     map_matrix = np.copy(grid_matrix)
 
     size_y = len(grid_matrix)
     size_x = len(grid_matrix[0])
 
+    # Paint a white rectangle around every white pixel
     for y in range(size_y):
         for x in range(size_x):
             if (grid_matrix[y][x] == 255):
-                cv2.rectangle(map_matrix, (x-fat_number, y-fat_number),
-                              (x+fat_number, y+fat_number), 255, -1)
+                cv2.rectangle(map_matrix, (x - fat_number, y - fat_number),
+                              (x + fat_number, y + fat_number), 255, -1)
 
     return map_matrix
 
 
+# Show the image of the path to be followed
 def pathToImage(obstacles_image, path):
     path_image = np.copy(obstacles_image)
     path_image = cv2.cvtColor(obstacles_image, cv2.COLOR_GRAY2RGB)
@@ -260,16 +251,13 @@ def pathToImage(obstacles_image, path):
 
     cv2.circle(path_image, (path[-1][1], path[-1][0]), 5, (255, 3, 214), -1)
 
-    # Save map and path image
-    # path_image.dtype = 'uint8'
-    # status_path = cv2.imwrite(
-    #     'C:/Users/GF63/OneDrive/Escritorio/IR-Summer-Project/Path_maze.jpg', path_image)
-
     cv2.imshow("Path", path_image)
-    return path_image
+    return None
 
 
+# A* algorithm
 def aStar(map_matrix, start_y, start_x, end_y, end_x):
+    # Python tcod library requires a matrix with the obstacles to be 0's and the walkable parts to be 1's.
     cost_matrix = np.ones((IMG_HEIGHT, IMG_WIDTH), dtype=np.int8)
 
     for i in range(len(map_matrix)):
@@ -279,6 +267,7 @@ def aStar(map_matrix, start_y, start_x, end_y, end_x):
 
     print("Finding AStar path...")
 
+    # Allow diagonal movement and the cost of it is the same as moving up-down and right-left
     aStar_graph = tcod.path.AStar(cost_matrix, 1.0)
     try:
         path_list = aStar_graph.get_path(start_y, start_x, end_y, end_x)
@@ -294,6 +283,7 @@ def getCommands(path):
     commands_meters = []
     counter_180 = 0
 
+    # Add the desired orientation to each desired position (y, x)
     for i in range(len(path) - 1):
         current_y = path[i][0]
         current_x = path[i][1]
@@ -315,6 +305,7 @@ def getCommands(path):
             else:
                 # Down
                 command.append(-180.0)
+                # Count the times we get this value.
                 counter_180 += 1
         elif current_y > desired_y:
             if current_x > desired_x:
@@ -332,16 +323,14 @@ def getCommands(path):
                 command.append(-135.0)
         detailed_commands.append(command)
 
+    # Only consider key nodes where there's a change in orientation
     for i in range(len(detailed_commands)-1):
         if (detailed_commands[i+1][2] != detailed_commands[i][2]):
             general_commands.append(detailed_commands[i])
 
-    # Add the END point to command list
-    # general_commands.append(detailed_commands[-1])                                    !!!!!!!!!!!! UNCOMMENT
-
+    # Change values in the commands to fix the robot's movement
     if counter_180 > 0:
         final_commands = np.copy(general_commands)
-
         # Fix commands to avoid problems with -180 degrees
         for i in range(len(general_commands)-1):
             if (general_commands[i+1][2] == -180.0):
@@ -353,11 +342,10 @@ def getCommands(path):
     else:
         commands_meters = pixelsToMeters(general_commands)
 
-    print(commands_meters)
-
     return commands_meters
 
 
+# Change the positions in pixels to positions in Coppelia units (meters)
 def pixelsToMeters(array_pixels):
     print("Converting pixels to Coppelia units...")
 
@@ -376,8 +364,8 @@ def pixelsToMeters(array_pixels):
     return array_meters
 
 
+# Function that controls the opening and closing of the ground robot's arms
 def armsMovement(clientID, left_joint, right_joint, isRescueDone):
-    # Function that returns isReadyToSearch = True when the ground robot has its arms open
 
     res_left_joint, left_joint_pos = sim.simxGetJointPosition(
         clientID, left_joint, sim.simx_opmode_oneshot)
@@ -411,7 +399,7 @@ def armsMovement(clientID, left_joint, right_joint, isRescueDone):
             clientID, left_joint, sim.simx_opmode_oneshot)[1]
         right_joint_pos = sim.simxGetJointPosition(
             clientID, right_joint, sim.simx_opmode_oneshot)[1]
-        if (left_joint_pos < -0.05) and (right_joint_pos > 0.078):
+        if (left_joint_pos < 0.0) and (right_joint_pos > 0.05):
             sim.simxSetJointTargetVelocity(
                 clientID, left_joint, 0.0, sim.simx_opmode_oneshot)
             sim.simxSetJointTargetVelocity(
@@ -421,6 +409,7 @@ def armsMovement(clientID, left_joint, right_joint, isRescueDone):
     return False, False
 
 
+# Function to control the movement of the ground robot
 def groundMovement(state, clientID, left_motor, right_motor, motor_speed):
     if state == 'FORWARD':
         sim.simxSetJointTargetVelocity(
@@ -450,9 +439,7 @@ def mapCenter(central_X, in_min, in_max, out_min, out_max):
     return (central_X - in_min) * (out_max - out_min) / (in_max - in_min) + out_min
 
 
-# The difference between the centers is considered through the
-# variable delta, which is added and substracted to the SPEED
-# of the robot's wheels
+# Function to find the difference between the centers (delta)
 def controllerMove(central_X):
     error = mapCenter(central_X, 0.0, IMG_WIDTH, -1.0, 1.0)
     delta = error*K_GAIN
